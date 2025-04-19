@@ -7,9 +7,10 @@ var Cfg *IMSConfig
 func DefaultIMS() *IMSConfig {
 	return &IMSConfig{
 		Core: ConfigCore{
-			Host:      "localhost",
-			Port:      80,
-			JWTSecret: uuid.New().String(),
+			Host:       "localhost",
+			Port:       80,
+			JWTSecret:  uuid.New().String(),
+			Deployment: "dev",
 		},
 	}
 }
@@ -64,4 +65,5 @@ type ConfigCore struct {
 	MasterKey        string
 	JWTSecret        string
 	AttachmentsStore string
+	Deployment       string
 }

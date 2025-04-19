@@ -5,14 +5,32 @@ select ID from EVENT where NAME = ?;
 select VERSION from SCHEMA_INFO;
 
 -- name: Events :many
-select NAME from EVENT;
+select ID, NAME from EVENT;
 
--- name: CreateEvent :exec
+-- name: CreateEvent :execlastid
 insert into EVENT (NAME) values (?);
 
 -- name: EventAccess :many
 select EXPRESSION, VALIDITY from EVENT_ACCESS
-where EVENT = (select ID from EVENT where NAME = ?) and MODE = ?;
+where EVENT = ? and MODE = ?;
+
+-- name: CreateIncident :execlastid
+insert into INCIDENT (
+    EVENT,
+    NUMBER,
+    CREATED,
+    PRIORITY,
+    STATE,
+    SUMMARY,
+    LOCATION_NAME,
+    LOCATION_CONCENTRIC,
+    LOCATION_RADIAL_HOUR,
+    LOCATION_RADIAL_MINUTE,
+    LOCATION_DESCRIPTION
+)
+values (
+   ?,?,?,?,?,?,?,?,?,?,?
+);
 
 -- name: Incidents :many
 select
@@ -46,19 +64,40 @@ group by
 
 -- name: Incidents_ReportEntries :many
 select
-    re.ID,
     ire.INCIDENT_NUMBER,
-    re.AUTHOR,
-    re.TEXT,
-    re.CREATED,
-    re.GENERATED,
-    re.STRICKEN,
-    re.ATTACHED_FILE
+    sqlc.embed(re)
 from
     INCIDENT__REPORT_ENTRY ire
         join REPORT_ENTRY re
              on re.ID = ire.REPORT_ENTRY
 where
-    ire.EVENT = (select e.ID from EVENT e where e.NAME = ?)
-  and re.GENERATED <= ?
+    ire.EVENT = ?
+    and re.GENERATED <= ?
 ;
+
+-- name: ConcentricStreets :many
+select ID, NAME from CONCENTRIC_STREET
+where EVENT = ?;
+
+-- name: IncidentTypes :many
+select NAME from INCIDENT_TYPE;
+
+-- name: FieldReports :many
+select
+    sqlc.embed(FIELD_REPORT)
+from
+    FIELD_REPORT
+where
+    EVENT = ?;
+
+-- name: FieldReports_ReportEntries :many
+select
+    irre.FIELD_REPORT_NUMBER,
+    sqlc.embed(re)
+from
+    FIELD_REPORT__REPORT_ENTRY irre
+        join REPORT_ENTRY re
+             on irre.REPORT_ENTRY = re.ID
+where
+    irre.EVENT = ?
+    and re.GENERATED <= ?;

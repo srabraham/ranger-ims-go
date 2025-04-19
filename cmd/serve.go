@@ -38,8 +38,8 @@ func runServer(cmd *cobra.Command, args []string) {
 	clubhouseDB := directory.MariaDB()
 
 	mux := http.NewServeMux()
-	api.AddToMux(mux, db, clubhouseDB)
-	web.AddToMux(mux)
+	api.AddToMux(mux, conf.Cfg, db, clubhouseDB)
+	web.AddToMux(mux, conf.Cfg)
 	//mux := api.CreateMux(context.Background(), db, clubhouseDB)
 
 	addr := fmt.Sprintf("%v:%v", conf.Cfg.Core.Host, conf.Cfg.Core.Port)

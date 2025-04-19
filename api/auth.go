@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/srabraham/ranger-ims-go/auth"
+	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
 	"io"
 	"log"
 	"net/http"
-	"strings"
+	"slices"
 	"time"
 )
 
@@ -53,48 +53,58 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	if !correct {
 		return
 	}
-	jwt := auth.GetJWT(vals.Identification, pa.jwtSecret, pa.jwtDuration)
+	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.CreateJWT(vals.Identification, pa.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 	marsh, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(marsh)
 }
 
 type GetAuth struct {
 	clubhouseDB *sql.DB
 	jwtSecret   string
+	admins      []string
 }
 
 type GetAuthResponse struct {
-	Authenticated bool   `json:"authenticated"`
-	User          string `json:"user"`
+	Authenticated bool                      `json:"authenticated"`
+	User          string                    `json:"user,omitzero"`
+	Admin         bool                      `json:"admin"`
+	EventAccess   map[string]AccessForEvent `json:"event_access"`
+}
+
+type AccessForEvent struct {
+	ReadIncidents     bool `json:"readIncidents"`
+	WriteIncidents    bool `json:"writeIncidents"`
+	WriteFieldReports bool `json:"writeFieldReports"`
+	AttachFiles       bool `json:"attachFiles"`
 }
 
 func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
-	authHead := req.Header.Get("Authorization")
-	authHead = strings.TrimPrefix(authHead, "Bearer ")
-	tok, err := jwt.Parse(authHead, func(token *jwt.Token) (any, error) {
-		return []byte(ga.jwtSecret), nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	claims, err := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.AuthenticateJWT(req.Header.Get("Authorization"))
 	if err != nil {
-		log.Printf("error parsing token: %v", err)
-		w.WriteHeader(http.StatusUnauthorized)
+		log.Printf("login failed: %v", err)
+		resp := GetAuthResponse{Authenticated: false}
+		marsh, _ := json.Marshal(resp)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(marsh)
 		return
 	}
-	if tok == nil {
-		log.Println("token is nil")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	if !tok.Valid {
-		log.Println("token is invalid")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	sub, _ := tok.Claims.GetSubject()
+	log.Printf("got claims %v", claims)
+	sub, _ := claims.GetSubject()
 	resp := GetAuthResponse{
 		Authenticated: true,
 		User:          sub,
+		Admin:         slices.Contains(ga.admins, sub),
+		EventAccess: map[string]AccessForEvent{
+			"2023": {
+				ReadIncidents:     true,
+				WriteIncidents:    true,
+				WriteFieldReports: true,
+			},
+		},
 	}
 	marsh, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(marsh)
 }

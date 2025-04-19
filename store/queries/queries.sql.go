@@ -10,23 +10,112 @@ import (
 	"database/sql"
 )
 
-const createEvent = `-- name: CreateEvent :exec
+const concentricStreets = `-- name: ConcentricStreets :many
+select ID, NAME from CONCENTRIC_STREET
+where EVENT = ?
+`
+
+type ConcentricStreetsRow struct {
+	ID   string
+	Name string
+}
+
+func (q *Queries) ConcentricStreets(ctx context.Context, event int32) ([]ConcentricStreetsRow, error) {
+	rows, err := q.db.QueryContext(ctx, concentricStreets, event)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConcentricStreetsRow
+	for rows.Next() {
+		var i ConcentricStreetsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const createEvent = `-- name: CreateEvent :execlastid
 insert into EVENT (NAME) values (?)
 `
 
-func (q *Queries) CreateEvent(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, createEvent, name)
-	return err
+func (q *Queries) CreateEvent(ctx context.Context, name string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, createEvent, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+const createIncident = `-- name: CreateIncident :execlastid
+insert into INCIDENT (
+    EVENT,
+    NUMBER,
+    CREATED,
+    PRIORITY,
+    STATE,
+    SUMMARY,
+    LOCATION_NAME,
+    LOCATION_CONCENTRIC,
+    LOCATION_RADIAL_HOUR,
+    LOCATION_RADIAL_MINUTE,
+    LOCATION_DESCRIPTION
+)
+values (
+   ?,?,?,?,?,?,?,?,?,?,?
+)
+`
+
+type CreateIncidentParams struct {
+	Event                int32
+	Number               int32
+	Created              float64
+	Priority             int8
+	State                IncidentState
+	Summary              sql.NullString
+	LocationName         sql.NullString
+	LocationConcentric   sql.NullString
+	LocationRadialHour   sql.NullInt16
+	LocationRadialMinute sql.NullInt16
+	LocationDescription  sql.NullString
+}
+
+func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, createIncident,
+		arg.Event,
+		arg.Number,
+		arg.Created,
+		arg.Priority,
+		arg.State,
+		arg.Summary,
+		arg.LocationName,
+		arg.LocationConcentric,
+		arg.LocationRadialHour,
+		arg.LocationRadialMinute,
+		arg.LocationDescription,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 const eventAccess = `-- name: EventAccess :many
 select EXPRESSION, VALIDITY from EVENT_ACCESS
-where EVENT = (select ID from EVENT where NAME = ?) and MODE = ?
+where EVENT = ? and MODE = ?
 `
 
 type EventAccessParams struct {
-	Name string
-	Mode EventAccessMode
+	Event int32
+	Mode  EventAccessMode
 }
 
 type EventAccessRow struct {
@@ -35,7 +124,7 @@ type EventAccessRow struct {
 }
 
 func (q *Queries) EventAccess(ctx context.Context, arg EventAccessParams) ([]EventAccessRow, error) {
-	rows, err := q.db.QueryContext(ctx, eventAccess, arg.Name, arg.Mode)
+	rows, err := q.db.QueryContext(ctx, eventAccess, arg.Event, arg.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -58,11 +147,135 @@ func (q *Queries) EventAccess(ctx context.Context, arg EventAccessParams) ([]Eve
 }
 
 const events = `-- name: Events :many
-select NAME from EVENT
+select ID, NAME from EVENT
 `
 
-func (q *Queries) Events(ctx context.Context) ([]string, error) {
+func (q *Queries) Events(ctx context.Context) ([]Event, error) {
 	rows, err := q.db.QueryContext(ctx, events)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fieldReports = `-- name: FieldReports :many
+select
+    field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
+from
+    FIELD_REPORT
+where
+    EVENT = ?
+`
+
+type FieldReportsRow struct {
+	FieldReport FieldReport
+}
+
+func (q *Queries) FieldReports(ctx context.Context, event int32) ([]FieldReportsRow, error) {
+	rows, err := q.db.QueryContext(ctx, fieldReports, event)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FieldReportsRow
+	for rows.Next() {
+		var i FieldReportsRow
+		if err := rows.Scan(
+			&i.FieldReport.Event,
+			&i.FieldReport.Number,
+			&i.FieldReport.Created,
+			&i.FieldReport.Summary,
+			&i.FieldReport.IncidentNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fieldReports_ReportEntries = `-- name: FieldReports_ReportEntries :many
+select
+    irre.FIELD_REPORT_NUMBER,
+    re.id, re.author, re.text, re.created, re.` + "`" + `generated` + "`" + `, re.stricken, re.attached_file
+from
+    FIELD_REPORT__REPORT_ENTRY irre
+        join REPORT_ENTRY re
+             on irre.REPORT_ENTRY = re.ID
+where
+    irre.EVENT = ?
+    and re.GENERATED <= ?
+`
+
+type FieldReports_ReportEntriesParams struct {
+	Event     int32
+	Generated bool
+}
+
+type FieldReports_ReportEntriesRow struct {
+	FieldReportNumber int32
+	ReportEntry       ReportEntry
+}
+
+func (q *Queries) FieldReports_ReportEntries(ctx context.Context, arg FieldReports_ReportEntriesParams) ([]FieldReports_ReportEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, fieldReports_ReportEntries, arg.Event, arg.Generated)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FieldReports_ReportEntriesRow
+	for rows.Next() {
+		var i FieldReports_ReportEntriesRow
+		if err := rows.Scan(
+			&i.FieldReportNumber,
+			&i.ReportEntry.ID,
+			&i.ReportEntry.Author,
+			&i.ReportEntry.Text,
+			&i.ReportEntry.Created,
+			&i.ReportEntry.Generated,
+			&i.ReportEntry.Stricken,
+			&i.ReportEntry.AttachedFile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const incidentTypes = `-- name: IncidentTypes :many
+select NAME from INCIDENT_TYPE
+`
+
+func (q *Queries) IncidentTypes(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, incidentTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -162,41 +375,29 @@ func (q *Queries) Incidents(ctx context.Context, name string) ([]IncidentsRow, e
 
 const incidents_ReportEntries = `-- name: Incidents_ReportEntries :many
 select
-    re.ID,
     ire.INCIDENT_NUMBER,
-    re.AUTHOR,
-    re.TEXT,
-    re.CREATED,
-    re.GENERATED,
-    re.STRICKEN,
-    re.ATTACHED_FILE
+    re.id, re.author, re.text, re.created, re.` + "`" + `generated` + "`" + `, re.stricken, re.attached_file
 from
     INCIDENT__REPORT_ENTRY ire
         join REPORT_ENTRY re
              on re.ID = ire.REPORT_ENTRY
 where
-    ire.EVENT = (select e.ID from EVENT e where e.NAME = ?)
-  and re.GENERATED <= ?
+    ire.EVENT = ?
+    and re.GENERATED <= ?
 `
 
 type Incidents_ReportEntriesParams struct {
-	Name      string
+	Event     int32
 	Generated bool
 }
 
 type Incidents_ReportEntriesRow struct {
-	ID             int32
 	IncidentNumber int32
-	Author         string
-	Text           string
-	Created        float64
-	Generated      bool
-	Stricken       bool
-	AttachedFile   sql.NullString
+	ReportEntry    ReportEntry
 }
 
 func (q *Queries) Incidents_ReportEntries(ctx context.Context, arg Incidents_ReportEntriesParams) ([]Incidents_ReportEntriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, incidents_ReportEntries, arg.Name, arg.Generated)
+	rows, err := q.db.QueryContext(ctx, incidents_ReportEntries, arg.Event, arg.Generated)
 	if err != nil {
 		return nil, err
 	}
@@ -205,14 +406,14 @@ func (q *Queries) Incidents_ReportEntries(ctx context.Context, arg Incidents_Rep
 	for rows.Next() {
 		var i Incidents_ReportEntriesRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.IncidentNumber,
-			&i.Author,
-			&i.Text,
-			&i.Created,
-			&i.Generated,
-			&i.Stricken,
-			&i.AttachedFile,
+			&i.ReportEntry.ID,
+			&i.ReportEntry.Author,
+			&i.ReportEntry.Text,
+			&i.ReportEntry.Created,
+			&i.ReportEntry.Generated,
+			&i.ReportEntry.Stricken,
+			&i.ReportEntry.AttachedFile,
 		); err != nil {
 			return nil, err
 		}
