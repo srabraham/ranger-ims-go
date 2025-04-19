@@ -60,7 +60,7 @@ templ Incidents(deployment string) {
             </button>
           </a>
         </div>
-
+        { }
         <button
                 id="show_state"
                 type="button"
@@ -81,7 +81,7 @@ templ Incidents(deployment string) {
             <a href="#" class="name dropdown-item" onclick="showState('active', true); return false;">Active</a>
           </li>
         </ul>
-
+        { }
         <button
                 id="show_days"
                 type="button"
@@ -109,7 +109,7 @@ templ Incidents(deployment string) {
             <a href="#" class="name dropdown-item">Last 4 Days</a>
           </li>
         </ul>
-
+        { }
         <button
                 id="show_type"
                 type="button"
@@ -125,7 +125,7 @@ templ Incidents(deployment string) {
           <a id="show_other_type" class="dropdown-item dropdown-item-checkable dropdown-item-checked" href="#">(other)</a>
           <!-- li will be inserted here by JQuery -->
         </ul>
-
+        { }
         <button
                 id="show_rows"
                 type="button"
