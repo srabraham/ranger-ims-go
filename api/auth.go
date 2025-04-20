@@ -11,6 +11,8 @@ import (
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"io"
 	"log"
+	"log/slog"
+	"maps"
 	"net/http"
 	"slices"
 	"time"
@@ -96,22 +98,22 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Printf("got claims %v", claims)
-	sub, _ := claims.GetSubject()
+	handle := claims.RangerHandle()
+	var roles []auth.Role
+	if slices.Contains(ga.admins, handle) {
+		roles = append(roles, auth.Administrator)
+	}
 	resp := GetAuthResponse{
 		Authenticated: true,
-		User:          sub,
-		Admin:         slices.Contains(ga.admins, sub),
-		//EventAccess: map[string]AccessForEvent{
-		//	"2023": {
-		//		ReadIncidents:     true,
-		//		WriteIncidents:    true,
-		//		WriteFieldReports: true,
-		//	},
-		//},
+		User:          handle,
+		Admin:         slices.Contains(roles, auth.Administrator),
 	}
 
-	req.ParseForm()
-
+	if err := req.ParseForm(); err != nil {
+		slog.ErrorContext(req.Context(), "parseForm error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
 		ea, err := access.GetEventsAccess(req.Context(), ga.imsDB, eventName)
@@ -119,29 +121,37 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 			log.Printf("failed to get events access: %v", err)
 		} else {
 
+			// TODO: need to check positions and teams as well for all three of these
+			//  and need to check validity
+			if slices.ContainsFunc(ea[eventName].Readers, func(rule imsjson.AccessRule) bool {
+				return rule.Expression == "person:"+handle
+			}) {
+				roles = append(roles, auth.EventReader)
+			}
+			if slices.ContainsFunc(ea[eventName].Writers, func(rule imsjson.AccessRule) bool {
+				return rule.Expression == "person:"+handle
+			}) {
+				roles = append(roles, auth.EventWriter)
+			}
+			if slices.ContainsFunc(ea[eventName].Reporters, func(rule imsjson.AccessRule) bool {
+				return rule.Expression == "person:"+handle
+			}) {
+				roles = append(roles, auth.EventReporter)
+			}
+
+			permissions := make(map[auth.Permission]bool)
+			for _, r := range roles {
+				maps.Copy(permissions, auth.RolesToPerms[r])
+			}
+
 			resp.EventAccess = map[string]AccessForEvent{
 				eventName: {
-					// TODO: need to check positions and teams as well for all three of these
-					//  and need to check validity
-					ReadIncidents: slices.ContainsFunc(ea[eventName].Readers, func(rule imsjson.AccessRule) bool {
-						return rule.Expression == "person:"+sub
-					}),
-					WriteIncidents: slices.ContainsFunc(ea[eventName].Writers, func(rule imsjson.AccessRule) bool {
-						return rule.Expression == "person:"+sub
-					}),
-					WriteFieldReports: slices.ContainsFunc(ea[eventName].Reporters, func(rule imsjson.AccessRule) bool {
-						return rule.Expression == "person:"+sub
-					}),
-					AttachFiles: false,
+					ReadIncidents:     permissions[auth.ReadIncidents],
+					WriteIncidents:    permissions[auth.WriteIncidents],
+					WriteFieldReports: permissions[auth.ReadWriteOwnFieldReports],
+					AttachFiles:       false,
 				},
 			}
-			// TODO: this is ugly... don't do this
-			sillyOverride := resp.EventAccess[eventName]
-			if sillyOverride.WriteIncidents {
-				sillyOverride.ReadIncidents = true
-				sillyOverride.WriteFieldReports = true
-			}
-			resp.EventAccess[eventName] = sillyOverride
 		}
 	}
 

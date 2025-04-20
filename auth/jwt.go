@@ -13,22 +13,18 @@ type JWTer struct {
 }
 
 func (j JWTer) CreateJWT(rangerName string, duration time.Duration) string {
-	//secret := conf.Cfg.Core.JWTSecret
-	//log.Println("secret:", secret)
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
-		jwt.MapClaims{
+	token, err := jwt.NewWithClaims(
+		jwt.SigningMethodHS256,
+		NewIMSClaims().
+			WithIssuedAt(time.Now()).
+			WithExpiration(time.Now().Add(duration)).
+			WithIssuer("ranger-ims-go").
+			WithRangerHandle(rangerName).
 			// TODO
-			"exp": time.Now().Add(duration).Unix(),
-			"iat": time.Now().Unix(),
-			"iss": "ranger-ims-go",
-
-			// TODO
-			"preferred_username": rangerName,
-			"ranger_on_site":     true,
-			"ranger_positions":   "Dirt - Green Dot,Green Dot Lead,Tech Ops,Green Dot Sanctuary,Operator,Tech On Call,Green Dot Lead Intern",
-			"ranger_teams":       "Green Dot Team,Operator Team,Tech Cadre",
-			"sub":                rangerName,
-		},
+			WithRangerOnSite(true).
+			WithRangerPositions("Dirt - Green Dot", "Green Dot Lead").
+			WithRangerTeams("Green Dot Team", "Operator Team").
+			WithSubject("12345"),
 	).SignedString([]byte(j.SecretKey))
 	if err != nil {
 		log.Panic(err)
@@ -36,9 +32,12 @@ func (j JWTer) CreateJWT(rangerName string, duration time.Duration) string {
 	return token
 }
 
-func (j JWTer) AuthenticateJWT(authHeader string) (jwt.MapClaims, error) {
+func (j JWTer) AuthenticateJWT(authHeader string) (*IMSClaims, error) {
 	authHeader = strings.TrimPrefix(authHeader, "Bearer ")
-	claims := jwt.MapClaims{}
+	if authHeader == "" {
+		return nil, fmt.Errorf("no token provided")
+	}
+	claims := IMSClaims{}
 	tok, err := jwt.ParseWithClaims(authHeader, &claims, func(token *jwt.Token) (any, error) {
 		return []byte(j.SecretKey), nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
@@ -51,5 +50,8 @@ func (j JWTer) AuthenticateJWT(authHeader string) (jwt.MapClaims, error) {
 	if !tok.Valid {
 		return nil, fmt.Errorf("token is invalid")
 	}
-	return claims, nil
+	if claims.RangerHandle() == "" {
+		return nil, fmt.Errorf("ranger handle is required")
+	}
+	return &claims, nil
 }
