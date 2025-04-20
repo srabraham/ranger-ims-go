@@ -72,6 +72,14 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.HandleFunc("GET /ims/api/ping",
+		func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ack"))
+		},
+	)
+
 	//mux.HandleFunc("GET /ims/api/events/{$}",
 	//	GetEvents{imsDB: db}.getEvents,
 	//)

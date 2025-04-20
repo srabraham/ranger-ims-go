@@ -54,10 +54,24 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig) *http.ServeMux {
 			},
 		),
 	)
+	mux.Handle("GET /ims/app/events/{eventName}/field_reports/{fieldReportNumber}/{$}",
+		Adapt(
+			func(w http.ResponseWriter, req *http.Request) {
+				template.FieldReport(cfg.Core.Deployment).Render(req.Context(), w)
+			},
+		),
+	)
 	mux.Handle("GET /ims/app/events/{eventName}/incidents/{$}",
 		Adapt(
 			func(w http.ResponseWriter, req *http.Request) {
 				template.Incidents(cfg.Core.Deployment).Render(req.Context(), w)
+			},
+		),
+	)
+	mux.Handle("GET /ims/app/events/{eventName}/incidents/{incidentNumber}/{$}",
+		Adapt(
+			func(w http.ResponseWriter, req *http.Request) {
+				template.Incident(cfg.Core.Deployment).Render(req.Context(), w)
 			},
 		),
 	)
