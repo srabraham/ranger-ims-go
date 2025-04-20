@@ -1,6 +1,5 @@
 package json
 
-type Personnel []Person
 type Person struct {
 	Handle      string `json:"handle"`
 	Status      string `json:"status"`

@@ -16,20 +16,22 @@ type GetIncidents struct {
 	imsDB *sql.DB
 }
 
-func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
+type GetIncidentsResponse []imsjson.Incident
+
+func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 
 	event := req.PathValue("eventName")
 
-	eventID, err := queries.New(ga.imsDB).QueryEventID(req.Context(), event)
+	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
 	if err != nil {
+		slog.Error("Failed to get event ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Println(err)
 		return
 	}
 
 	generatedLTE := false // false should mean to exclude
 
-	reportEntries, err := queries.New(ga.imsDB).Incidents_ReportEntries(req.Context(), queries.Incidents_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
+	reportEntries, err := queries.New(hand.imsDB).Incidents_ReportEntries(req.Context(), queries.Incidents_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
@@ -50,13 +52,13 @@ func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 
-	rows, err := queries.New(ga.imsDB).Incidents(req.Context(), event)
+	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), event)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	resp := make([]imsjson.Incident, 0)
+	resp := make(GetIncidentsResponse, 0)
 
 	var garett = "garett"
 	for _, r := range rows {
@@ -105,14 +107,16 @@ type GetIncident struct {
 	imsDB *sql.DB
 }
 
-func (ga GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
+type GetIncidentResponse imsjson.Incident
+
+func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 
 	event := req.PathValue("eventName")
 	incident := req.PathValue("incidentNumber")
 
-	eventID, err := queries.New(ga.imsDB).QueryEventID(req.Context(), event)
+	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
 	if err != nil {
-		log.Println(err)
+		slog.Error("Failed to get event ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -124,7 +128,7 @@ func (ga GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r, err := queries.New(ga.imsDB).Incident(req.Context(), queries.IncidentParams{
+	r, err := queries.New(hand.imsDB).Incident(req.Context(), queries.IncidentParams{
 		Event:  eventID,
 		Number: int32(incidentNumber),
 	})
@@ -134,7 +138,7 @@ func (ga GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reportEntries, err := queries.New(ga.imsDB).Incident_ReportEntries(req.Context(),
+	reportEntries, err := queries.New(hand.imsDB).Incident_ReportEntries(req.Context(),
 		queries.Incident_ReportEntriesParams{Event: eventID, IncidentNumber: int32(incidentNumber)},
 	)
 	if err != nil {
@@ -166,7 +170,7 @@ func (ga GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 	json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 
 	var garett = "garett"
-	result := imsjson.Incident{
+	result := GetIncidentResponse{
 		// TODO: use event from the db, not the request
 		Event:   ptr(event),
 		Number:  ptr(r.Incident.Number),

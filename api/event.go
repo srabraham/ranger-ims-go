@@ -13,8 +13,10 @@ type GetEvents struct {
 	imsDB *sql.DB
 }
 
-func (ge GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
-	events, err := queries.New(ge.imsDB).Events(req.Context())
+type GetEventsResponse []imsjson.Event
+
+func (hand GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
+	events, err := queries.New(hand.imsDB).Events(req.Context())
 	if err != nil {
 		log.Println(err)
 		return
@@ -22,7 +24,7 @@ func (ge GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
 
 	// TODO: need to apply authorization per event
 
-	resp := make([]imsjson.Event, 0)
+	resp := make(GetEventsResponse, 0)
 
 	for _, e := range events {
 		resp = append(resp, imsjson.Event{

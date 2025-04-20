@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"github.com/srabraham/ranger-ims-go/store/queries"
 	"maps"
 	"slices"
@@ -19,35 +22,58 @@ const (
 type Permission string
 
 const (
-	ReadIncidents            Permission = "ReadIncidents"
-	WriteIncidents           Permission = "WriteIncidents"
-	ReadAllFieldReports      Permission = "ReadAllFieldReports"
-	WriteAllFieldReports     Permission = "WriteAllFieldReports"
-	ReadWriteOwnFieldReports Permission = "ReadWriteOwnFieldReports"
-	ReadPersonnel            Permission = "ReadPersonnel"
-	AdminIMS                 Permission = "AdminIMS"
+	ReadIncidents        Permission = "ReadIncidents"
+	WriteIncidents       Permission = "WriteIncidents"
+	ReadAllFieldReports  Permission = "ReadAllFieldReports"
+	WriteAllFieldReports Permission = "WriteAllFieldReports"
+	WriteOwnFieldReports Permission = "WriteOwnFieldReports"
+	ReadOwnFieldReports  Permission = "ReadOwnFieldReports"
+	ReadPersonnel        Permission = "ReadPersonnel"
+	AdminIMS             Permission = "AdminIMS"
 )
 
 var RolesToPerms = map[Role]map[Permission]bool{
 	EventReporter: {
-		ReadWriteOwnFieldReports: true,
+		WriteOwnFieldReports: true,
+		ReadOwnFieldReports:  true,
 	},
 	EventReader: {
 		ReadIncidents:       true,
 		ReadAllFieldReports: true,
+		ReadOwnFieldReports: true,
 		ReadPersonnel:       true,
 	},
 	EventWriter: {
-		ReadIncidents:            true,
-		WriteIncidents:           true,
-		ReadAllFieldReports:      true,
-		WriteAllFieldReports:     true,
-		ReadWriteOwnFieldReports: true,
-		ReadPersonnel:            true,
+		ReadIncidents:        true,
+		WriteIncidents:       true,
+		ReadAllFieldReports:  true,
+		WriteAllFieldReports: true,
+		WriteOwnFieldReports: true,
+		ReadOwnFieldReports:  true,
+		ReadPersonnel:        true,
 	},
 	Administrator: {
 		AdminIMS: true,
 	},
+}
+
+func UserPermissions2(
+	ctx context.Context,
+	eventName string, // or "" for no event
+	imsDB *sql.DB,
+	imsAdmins []string,
+	claims IMSClaims,
+) (map[Permission]bool, error) {
+	eventID, err := queries.New(imsDB).QueryEventID(ctx, eventName)
+	if err != nil {
+		return nil, fmt.Errorf("QueryEventID: %w", err)
+	}
+	ea, err := queries.New(imsDB).EventAccess(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("EventAccess: %w", err)
+	}
+	permissions := UserPermissions(ea, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+	return permissions, nil
 }
 
 func UserPermissions(

@@ -17,7 +17,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
 			GetEventAccesses{imsDB: db}.getEventAccesses,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -31,6 +31,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 			}.postAuth,
 		),
+		// This endpoint does not require authentication, nor
+		// should it even consider current Authorization header.
 	)
 
 	mux.Handle("GET /ims/api/auth",
@@ -41,22 +43,24 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				jwtSecret:   cfg.Core.JWTSecret,
 				admins:      cfg.Core.Admins,
 			}.getAuth,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
+			// This endpoint does not require authentication
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents",
 		Adapt(
 			GetIncidents{imsDB: db}.getIncidents,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
 			GetIncident{imsDB: db}.getIncident,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -64,15 +68,17 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
 			GetFieldReports{imsDB: db}.getFieldReports,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			// TODO: need a READ permission
+			RequireAuthorization(auth.ReadOwnFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events",
 		Adapt(
 			GetEvents{imsDB: db}.getEvents,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -80,7 +86,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/streets",
 		Adapt(
 			GetStreets{imsDB: db}.getStreets,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -88,7 +94,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
 			GetIncidentTypes{imsDB: db}.getIncidentTypes,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -96,7 +102,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
 			GetPersonnel{clubhouseDB: clubhouseDB}.getPersonnel,
-			ExtractClaims(j),
+			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),
 	)
@@ -162,7 +168,7 @@ type JWTContext struct {
 	Error  error
 }
 
-func ExtractClaims(j auth.JWTer) Adapter {
+func ExtractClaimsToContext(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -196,19 +202,19 @@ func RequireAuthenticated() Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
 			if !found {
-				slog.ErrorContext(r.Context(), "the ExtractClaims adapter must be called before RequireAuthenticated")
+				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			if jwtCtx.Error != nil || jwtCtx.Claims == nil {
-				slog.ErrorContext(r.Context(), "JWT error", "error", jwtCtx.Error)
+				slog.Error("JWT error", "error", jwtCtx.Error)
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Invalid Authorization token"))
 				return
 			}
-			slog.InfoContext(r.Context(), "in require auth", "claims", jwtCtx.Claims)
+			slog.Info("in require auth", "claims", jwtCtx.Claims)
 			if jwtCtx.Claims.RangerHandle() == "" {
-				slog.ErrorContext(r.Context(), "No Ranger handle in JWT")
+				slog.Error("No Ranger handle in JWT")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Invalid Authorization token"))
 				return
@@ -218,26 +224,38 @@ func RequireAuthenticated() Adapter {
 	}
 }
 
-//}
-//func RequireAuthenticated(j auth.JWTer) Adapter {
-//	return func(next http.Handler) http.Handler {
-//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//			header := r.Header.Get("Authorization")
-//			if header == "" {
-//				w.WriteHeader(http.StatusUnauthorized)
-//				w.Write([]byte("No Authorization token was provided"))
-//				return
-//			}
-//			_, err := j.AuthenticateJWT(header)
-//			if err != nil {
-//				w.WriteHeader(http.StatusUnauthorized)
-//				w.Write([]byte("Invalid Authorization token"))
-//				return
-//			}
-//			next.ServeHTTP(w, r)
-//		})
-//	}
-//}
+func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []string) Adapter {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
+			if !found {
+				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			//if err := r.ParseForm(); err != nil {
+			//	slog.Error("error parsing form", "error", err)
+			//	w.WriteHeader(http.StatusBadRequest)
+			//	return
+			//}
+			//permissions, err := auth.UserPermissions2(r.Context(), r.FormValue("event_id"), imsDB, imsAdmins, *jwtCtx.Claims)
+			permissions, err := auth.UserPermissions2(r.Context(), r.PathValue("eventName"), imsDB, imsAdmins, *jwtCtx.Claims)
+			if err != nil {
+				slog.Error("Failed to compute permissions", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			slog.Info("testing authorization", "permissions", permissions, "required", required)
+			if !permissions[required] {
+				slog.Info("rejected!")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
 	handler := http.Handler(h)

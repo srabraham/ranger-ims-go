@@ -6,9 +6,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
-	"github.com/srabraham/ranger-ims-go/store/queries"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -23,32 +21,31 @@ type PostAuth struct {
 	jwtDuration time.Duration
 }
 
+type PostAuthRequest struct {
+	Identification string `json:"identification"`
+	Password       string `json:"password"`
+}
 type PostAuthResponse struct {
 	Token string `json:"token"`
 }
 
-func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
-	results, err := clubhousequeries.New(pa.clubhouseDB).RangersById(req.Context())
+func (hand PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
+	results, err := clubhousequeries.New(hand.clubhouseDB).RangersById(req.Context())
 	if err != nil {
+		slog.Error("Failed to fetch Rangers", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	req.Context()
-	//for _, r := range results {
-	//	spew.Dump(r)
-	//}
 	b, err := io.ReadAll(req.Body)
 	defer req.Body.Close()
 	if err != nil {
 		return
 	}
 
-	type AuthReq struct {
-		Identification string `json:"identification"`
-		Password       string `json:"password"`
-	}
-
-	vals := AuthReq{}
+	vals := PostAuthRequest{}
 	if err = json.Unmarshal(b, &vals); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	slog.InfoContext(req.Context(), "attempting login", "identification", vals.Identification)
@@ -68,18 +65,17 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	correct, _ := auth.VerifyPassword(vals.Password, storedPassHash)
-	log.Printf("password was correct? %v", correct)
 	if !correct {
-		slog.ErrorContext(req.Context(), "invalid credentials", "identification", vals.Identification)
+		slog.Error("invalid credentials", "identification", vals.Identification)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	// TODO: cache all this
-	teams, _ := clubhousequeries.New(pa.clubhouseDB).Teams(req.Context())
-	positions, _ := clubhousequeries.New(pa.clubhouseDB).Positions(req.Context())
-	personTeams, _ := clubhousequeries.New(pa.clubhouseDB).PersonTeams(req.Context())
-	personPositions, _ := clubhousequeries.New(pa.clubhouseDB).PersonPositions(req.Context())
+	teams, _ := clubhousequeries.New(hand.clubhouseDB).Teams(req.Context())
+	positions, _ := clubhousequeries.New(hand.clubhouseDB).Positions(req.Context())
+	personTeams, _ := clubhousequeries.New(hand.clubhouseDB).PersonTeams(req.Context())
+	personPositions, _ := clubhousequeries.New(hand.clubhouseDB).PersonPositions(req.Context())
 
 	var foundPositions []uint64
 	var foundPositionNames []string
@@ -106,7 +102,8 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, pa.jwtDuration)
+	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
+		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, hand.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 	marsh, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
@@ -134,21 +131,20 @@ type AccessForEvent struct {
 	AttachFiles       bool `json:"attachFiles"`
 }
 
-func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
-	claims, err := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.AuthenticateJWT(req.Header.Get("Authorization"))
-	if err != nil {
-		log.Printf("login failed: %v", err)
+func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
+	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
+	if !found || jwtCtx.Error != nil || jwtCtx.Claims == nil {
+		slog.Error("login failed", "error", jwtCtx.Error)
 		resp := GetAuthResponse{Authenticated: false}
 		marsh, _ := json.Marshal(resp)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(marsh)
 		return
 	}
-
-	log.Printf("got claims %v", claims)
+	claims := jwtCtx.Claims
 	handle := claims.RangerHandle()
 	var roles []auth.Role
-	if slices.Contains(ga.admins, handle) {
+	if slices.Contains(hand.admins, handle) {
 		roles = append(roles, auth.Administrator)
 	}
 	resp := GetAuthResponse{
@@ -158,32 +154,39 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := req.ParseForm(); err != nil {
-		slog.ErrorContext(req.Context(), "parseForm error", err)
+		slog.Error("parseForm error", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
-		//ea, err := access.GetEventsAccess(req.Context(), ga.imsDB, eventName)
-		eventID, err := queries.New(ga.imsDB).QueryEventID(req.Context(), eventName)
+
+		permissions, err := auth.UserPermissions2(req.Context(), eventName, hand.imsDB, hand.admins, *claims)
 		if err != nil {
-			slog.ErrorContext(req.Context(), "queryEventID", "error", err)
+			slog.Error("Failed to compute permissions", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		ea, err := queries.New(ga.imsDB).EventAccess(req.Context(), eventID)
-		if err != nil {
-			slog.ErrorContext(req.Context(), "EventAccess", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		permissions := auth.UserPermissions(ea, ga.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+
+		//eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+		//if err != nil {
+		//	slog.Error("Failed to get event ID", "error", err)
+		//	w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		//}
+		//ea, err := queries.New(hand.imsDB).EventAccess(req.Context(), eventID)
+		//if err != nil {
+		//	slog.Error("EventAccess", "error", err)
+		//	w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		//}
+		//permissions := auth.UserPermissions(ea, hand.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 
 		resp.EventAccess = map[string]AccessForEvent{
 			eventName: {
 				ReadIncidents:     permissions[auth.ReadIncidents],
 				WriteIncidents:    permissions[auth.WriteIncidents],
-				WriteFieldReports: permissions[auth.ReadWriteOwnFieldReports],
+				WriteFieldReports: permissions[auth.WriteOwnFieldReports],
 				AttachFiles:       false,
 			},
 		}

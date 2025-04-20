@@ -6,6 +6,7 @@ import (
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/queries"
 	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -14,19 +15,22 @@ type GetFieldReports struct {
 	imsDB *sql.DB
 }
 
-func (gfr GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Request) {
+type GetFieldReportsResponse []imsjson.FieldReport
+
+func (hand GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Request) {
 
 	event := req.PathValue("eventName")
 
-	eventID, err := queries.New(gfr.imsDB).QueryEventID(req.Context(), event)
+	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
 	if err != nil {
-		log.Println(err)
+		slog.Error("Failed to get event ID", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	generatedLTE := false // false should mean to exclude
 
-	reportEntries, err := queries.New(gfr.imsDB).FieldReports_ReportEntries(req.Context(), queries.FieldReports_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
+	reportEntries, err := queries.New(hand.imsDB).FieldReports_ReportEntries(req.Context(), queries.FieldReports_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
 	if err != nil {
 		log.Println(err)
 		return
@@ -46,13 +50,13 @@ func (gfr GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Requ
 		})
 	}
 
-	rows, err := queries.New(gfr.imsDB).FieldReports(req.Context(), eventID)
+	rows, err := queries.New(hand.imsDB).FieldReports(req.Context(), eventID)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	resp := make([]imsjson.FieldReport, 0)
+	resp := make(GetFieldReportsResponse, 0)
 
 	for _, r := range rows {
 		fr := r.FieldReport

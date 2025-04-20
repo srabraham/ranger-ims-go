@@ -13,24 +13,20 @@ type GetPersonnel struct {
 	clubhouseDB *sql.DB
 }
 
-func (gp GetPersonnel) getPersonnel(w http.ResponseWriter, req *http.Request) {
-	//if err := req.ParseForm(); err != nil {
-	//	slog.ErrorContext(req.Context(), "getPersonnel failed to parse form", "error", err)
-	//	http.Error(w, err.Error(), http.StatusInternalServerError)
-	//	return
-	//}
-	//includeHidden := false
-	//if req.Form.Get("hidden") == "true" {
-	//	includeHidden = true
-	//}
-	results, err := clubhousequeries.New(gp.clubhouseDB).RangersById(req.Context())
+type GetPersonnelResponse []imsjson.Person
+
+func (hand GetPersonnel) getPersonnel(w http.ResponseWriter, req *http.Request) {
+
+	// TODO: cache the personnel
+
+	results, err := clubhousequeries.New(hand.clubhouseDB).RangersById(req.Context())
 	if err != nil {
 		slog.ErrorContext(req.Context(), "Error getting rangers", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	response := make(imsjson.Personnel, 0)
+	response := make(GetPersonnelResponse, 0)
 	for _, r := range results {
 		response = append(response, imsjson.Person{
 			Handle:      r.Callsign,
