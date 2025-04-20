@@ -52,7 +52,7 @@ func (gfr GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	var resp []imsjson.FieldReport
+	resp := make([]imsjson.FieldReport, 0)
 
 	for _, r := range rows {
 		fr := r.FieldReport

@@ -54,7 +54,7 @@ func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var resp []imsjson.Incident
+	resp := make([]imsjson.Incident, 0)
 
 	var garett = "garett"
 	for _, r := range rows {

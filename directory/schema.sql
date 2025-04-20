@@ -82,3 +82,77 @@ CREATE TABLE `person` (
     KEY `person_lms_id_index` (`lms_id`),
     KEY `person_status_index` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `position` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    `title` varchar(40) NOT NULL,
+    `new_user_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `all_rangers` tinyint(1) NOT NULL DEFAULT 0,
+    `count_hours` tinyint(1) NOT NULL DEFAULT 1,
+    `min` int(10) NOT NULL DEFAULT 1 COMMENT 'Min suggested Rangers per slot',
+    `max` int(10) DEFAULT NULL COMMENT 'Max suggested Rangers per slot',
+    `on_sl_report` tinyint(1) DEFAULT NULL,
+    `on_trainer_report` tinyint(1) NOT NULL DEFAULT 0,
+    `short_title` varchar(6) DEFAULT NULL,
+    `type` varchar(32) DEFAULT NULL,
+    `training_position_id` bigint(20) unsigned DEFAULT NULL,
+    `contact_email` varchar(200) DEFAULT NULL,
+    `prevent_multiple_enrollments` tinyint(1) NOT NULL DEFAULT 0,
+    `active` tinyint(1) NOT NULL DEFAULT 1,
+    `alert_when_empty` tinyint(1) NOT NULL DEFAULT 0,
+    `team_id` int(11) DEFAULT NULL,
+    `require_training_for_roles` tinyint(1) NOT NULL DEFAULT 0,
+    `team_category` enum('public','all_members','optional') NOT NULL DEFAULT 'public',
+    `alert_when_becomes_empty` tinyint(1) NOT NULL DEFAULT 0,
+    `alert_when_no_trainers` tinyint(1) NOT NULL DEFAULT 0,
+    `paycode` varchar(255) DEFAULT NULL,
+    `resource_tag` varchar(255) DEFAULT NULL,
+    `deselect_on_team_join` tinyint(1) NOT NULL DEFAULT 0,
+    `no_payroll_hours_adjustment` tinyint(1) NOT NULL DEFAULT 0,
+    `no_training_required` tinyint(1) NOT NULL DEFAULT 0,
+    `auto_sign_out` tinyint(1) NOT NULL DEFAULT 0,
+    `sign_out_hour_cap` double(8,2) NOT NULL DEFAULT 0.00,
+    `mvr_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `pvr_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `parent_position_id` int(11) DEFAULT NULL,
+    `not_timesheet_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `cruise_direction` tinyint(1) NOT NULL DEFAULT 0,
+    `mvr_signup_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `position_mvr_eligible_index` (`mvr_eligible`),
+    KEY `position_pvr_eligible_index` (`pvr_eligible`),
+    KEY `position_parent_position_id_index` (`parent_position_id`),
+    KEY `position_cruise_direction_index` (`cruise_direction`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci;
+
+CREATE TABLE `person_position` (
+    `person_id` bigint(20) unsigned NOT NULL,
+    `position_id` bigint(20) unsigned NOT NULL,
+    PRIMARY KEY (`person_id`,`position_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci COMMENT='links person to position';
+
+CREATE TABLE `team` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    `title` varchar(255) NOT NULL,
+    `type` varchar(255) NOT NULL DEFAULT 'team',
+    `active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    `mvr_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `pvr_eligible` tinyint(1) NOT NULL DEFAULT 0,
+    `email` varchar(255) DEFAULT NULL,
+    `description` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `team_mvr_eligible_index` (`mvr_eligible`),
+    KEY `team_pvr_eligible_index` (`pvr_eligible`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `person_team` (
+   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+   `person_id` int(11) NOT NULL,
+   `team_id` int(11) NOT NULL,
+   `created_at` timestamp NULL DEFAULT NULL,
+   `updated_at` timestamp NULL DEFAULT NULL,
+   PRIMARY KEY (`id`),
+   UNIQUE KEY `person_team_person_id_team_id_unique` (`person_id`,`team_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

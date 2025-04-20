@@ -163,6 +163,49 @@ func (ns NullPersonStatus) Value() (driver.Value, error) {
 	return string(ns.PersonStatus), nil
 }
 
+type PositionTeamCategory string
+
+const (
+	PositionTeamCategoryPublic     PositionTeamCategory = "public"
+	PositionTeamCategoryAllMembers PositionTeamCategory = "all_members"
+	PositionTeamCategoryOptional   PositionTeamCategory = "optional"
+)
+
+func (e *PositionTeamCategory) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PositionTeamCategory(s)
+	case string:
+		*e = PositionTeamCategory(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PositionTeamCategory: %T", src)
+	}
+	return nil
+}
+
+type NullPositionTeamCategory struct {
+	PositionTeamCategory PositionTeamCategory
+	Valid                bool // Valid is true if PositionTeamCategory is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPositionTeamCategory) Scan(value interface{}) error {
+	if value == nil {
+		ns.PositionTeamCategory, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PositionTeamCategory.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPositionTeamCategory) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PositionTeamCategory), nil
+}
+
 type Person struct {
 	ID                 int64
 	FirstName          string
@@ -240,4 +283,70 @@ type Person struct {
 	YearsAsContributor       sql.NullString
 	YearsAsRanger            sql.NullString
 	YearsCombined            sql.NullString
+}
+
+// links person to position
+type PersonPosition struct {
+	PersonID   uint64
+	PositionID uint64
+}
+
+type PersonTeam struct {
+	ID        uint64
+	PersonID  int32
+	TeamID    int32
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
+}
+
+type Position struct {
+	ID              uint64
+	Title           string
+	NewUserEligible bool
+	AllRangers      bool
+	CountHours      bool
+	// Min suggested Rangers per slot
+	Min int32
+	// Max suggested Rangers per slot
+	Max                        sql.NullInt32
+	OnSlReport                 sql.NullBool
+	OnTrainerReport            bool
+	ShortTitle                 sql.NullString
+	Type                       sql.NullString
+	TrainingPositionID         sql.NullInt64
+	ContactEmail               sql.NullString
+	PreventMultipleEnrollments bool
+	Active                     bool
+	AlertWhenEmpty             bool
+	TeamID                     sql.NullInt32
+	RequireTrainingForRoles    bool
+	TeamCategory               PositionTeamCategory
+	AlertWhenBecomesEmpty      bool
+	AlertWhenNoTrainers        bool
+	Paycode                    sql.NullString
+	ResourceTag                sql.NullString
+	DeselectOnTeamJoin         bool
+	NoPayrollHoursAdjustment   bool
+	NoTrainingRequired         bool
+	AutoSignOut                bool
+	SignOutHourCap             float64
+	MvrEligible                bool
+	PvrEligible                bool
+	ParentPositionID           sql.NullInt32
+	NotTimesheetEligible       bool
+	CruiseDirection            bool
+	MvrSignupEligible          bool
+}
+
+type Team struct {
+	ID          uint64
+	Title       string
+	Type        string
+	Active      bool
+	CreatedAt   sql.NullTime
+	UpdatedAt   sql.NullTime
+	MvrEligible bool
+	PvrEligible bool
+	Email       sql.NullString
+	Description sql.NullString
 }

@@ -190,6 +190,7 @@ func RequireAuthenticated() Adapter {
 				w.Write([]byte("Invalid Authorization token"))
 				return
 			}
+			slog.InfoContext(r.Context(), "in require auth", "claims", jwtCtx.Claims)
 			if jwtCtx.Claims.RangerHandle() == "" {
 				slog.ErrorContext(r.Context(), "No Ranger handle in JWT")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -226,7 +227,7 @@ func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
 	handler := http.Handler(h)
 	for i := range adapters {
 		adapter := adapters[len(adapters)-1-i] // range in reverse
-		handler = adapter(h)
+		handler = adapter(handler)
 	}
 	return handler
 }

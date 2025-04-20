@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -12,7 +13,14 @@ type JWTer struct {
 	SecretKey string
 }
 
-func (j JWTer) CreateJWT(rangerName string, duration time.Duration) string {
+func (j JWTer) CreateJWT(
+	rangerName string,
+	clubhouseID int64,
+	positions []string,
+	teams []string,
+	onsite bool,
+	duration time.Duration,
+) string {
 	token, err := jwt.NewWithClaims(
 		jwt.SigningMethodHS256,
 		NewIMSClaims().
@@ -20,11 +28,10 @@ func (j JWTer) CreateJWT(rangerName string, duration time.Duration) string {
 			WithExpiration(time.Now().Add(duration)).
 			WithIssuer("ranger-ims-go").
 			WithRangerHandle(rangerName).
-			// TODO
-			WithRangerOnSite(true).
-			WithRangerPositions("Dirt - Green Dot", "Green Dot Lead").
-			WithRangerTeams("Green Dot Team", "Operator Team").
-			WithSubject("12345"),
+			WithRangerOnSite(onsite).
+			WithRangerPositions(positions...).
+			WithRangerTeams(teams...).
+			WithSubject(strconv.FormatInt(clubhouseID, 10)),
 	).SignedString([]byte(j.SecretKey))
 	if err != nil {
 		log.Panic(err)

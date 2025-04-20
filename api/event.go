@@ -22,7 +22,7 @@ func (ge GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
 
 	// TODO: need to apply authorization per event
 
-	var resp []imsjson.Event
+	resp := make([]imsjson.Event, 0)
 
 	for _, e := range events {
 		resp = append(resp, imsjson.Event{

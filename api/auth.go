@@ -3,18 +3,17 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/srabraham/ranger-ims-go/api/access"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
-	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store/queries"
 	"io"
 	"log"
 	"log/slog"
-	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -35,14 +34,15 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	req.Context()
-	for _, r := range results {
-		spew.Dump(r)
-	}
+	//for _, r := range results {
+	//	spew.Dump(r)
+	//}
 	b, err := io.ReadAll(req.Body)
 	defer req.Body.Close()
 	if err != nil {
 		return
 	}
+
 	type AuthReq struct {
 		Identification string `json:"identification"`
 		Password       string `json:"password"`
@@ -52,13 +52,62 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	if err = json.Unmarshal(b, &vals); err != nil {
 		return
 	}
-	log.Printf("logging in as %v", vals.Identification)
-	correct, _ := auth.VerifyPassword(vals.Password, "$2b$12$ls.WSuMjGignj1.Ob1jh8e:fcef3deeb59ec359a7b82f836d6fef9fc42042a3")
-	log.Printf("password was valid? %v", correct)
+	slog.InfoContext(req.Context(), "attempting login", "identification", vals.Identification)
+
+	var storedPassHash string
+	var userID int64
+	var onsite bool
+	for _, person := range results {
+		callsignMatch := person.Callsign == vals.Identification
+		emailMatch := person.Email.Valid && strings.ToLower(person.Email.String) == strings.ToLower(vals.Identification)
+		if callsignMatch || emailMatch {
+			userID = person.ID
+			storedPassHash = person.Password.String
+			onsite = person.OnSite
+			break
+		}
+	}
+
+	correct, _ := auth.VerifyPassword(vals.Password, storedPassHash)
+	log.Printf("password was correct? %v", correct)
 	if !correct {
+		slog.ErrorContext(req.Context(), "invalid credentials", "identification", vals.Identification)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.CreateJWT(vals.Identification, pa.jwtDuration)
+
+	// TODO: cache all this
+	teams, _ := clubhousequeries.New(pa.clubhouseDB).Teams(req.Context())
+	positions, _ := clubhousequeries.New(pa.clubhouseDB).Positions(req.Context())
+	personTeams, _ := clubhousequeries.New(pa.clubhouseDB).PersonTeams(req.Context())
+	personPositions, _ := clubhousequeries.New(pa.clubhouseDB).PersonPositions(req.Context())
+
+	var foundPositions []uint64
+	var foundPositionNames []string
+	var foundTeams []int32
+	var foundTeamNames []string
+	for _, pp := range personPositions {
+		if pp.PersonID == uint64(userID) {
+			foundPositions = append(foundPositions, pp.PositionID)
+		}
+	}
+	for _, pos := range positions {
+		if slices.Contains(foundPositions, pos.ID) {
+			foundPositionNames = append(foundPositionNames, pos.Title)
+		}
+	}
+	for _, pt := range personTeams {
+		if pt.PersonID == int32(userID) {
+			foundTeams = append(foundTeams, pt.TeamID)
+		}
+	}
+	for _, team := range teams {
+		if slices.Contains(foundTeams, int32(team.ID)) {
+			foundTeamNames = append(foundTeamNames, team.Title)
+		}
+	}
+
+	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, pa.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 	marsh, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
@@ -116,42 +165,28 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	}
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
-		ea, err := access.GetEventsAccess(req.Context(), ga.imsDB, eventName)
+		//ea, err := access.GetEventsAccess(req.Context(), ga.imsDB, eventName)
+		eventID, err := queries.New(ga.imsDB).QueryEventID(req.Context(), eventName)
 		if err != nil {
-			log.Printf("failed to get events access: %v", err)
-		} else {
+			slog.ErrorContext(req.Context(), "queryEventID", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		ea, err := queries.New(ga.imsDB).EventAccess(req.Context(), eventID)
+		if err != nil {
+			slog.ErrorContext(req.Context(), "EventAccess", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		permissions := access.UserPermissions(ea, ga.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 
-			// TODO: need to check positions and teams as well for all three of these
-			//  and need to check validity
-			if slices.ContainsFunc(ea[eventName].Readers, func(rule imsjson.AccessRule) bool {
-				return rule.Expression == "person:"+handle
-			}) {
-				roles = append(roles, auth.EventReader)
-			}
-			if slices.ContainsFunc(ea[eventName].Writers, func(rule imsjson.AccessRule) bool {
-				return rule.Expression == "person:"+handle
-			}) {
-				roles = append(roles, auth.EventWriter)
-			}
-			if slices.ContainsFunc(ea[eventName].Reporters, func(rule imsjson.AccessRule) bool {
-				return rule.Expression == "person:"+handle
-			}) {
-				roles = append(roles, auth.EventReporter)
-			}
-
-			permissions := make(map[auth.Permission]bool)
-			for _, r := range roles {
-				maps.Copy(permissions, auth.RolesToPerms[r])
-			}
-
-			resp.EventAccess = map[string]AccessForEvent{
-				eventName: {
-					ReadIncidents:     permissions[auth.ReadIncidents],
-					WriteIncidents:    permissions[auth.WriteIncidents],
-					WriteFieldReports: permissions[auth.ReadWriteOwnFieldReports],
-					AttachFiles:       false,
-				},
-			}
+		resp.EventAccess = map[string]AccessForEvent{
+			eventName: {
+				ReadIncidents:     permissions[auth.ReadIncidents],
+				WriteIncidents:    permissions[auth.WriteIncidents],
+				WriteFieldReports: permissions[auth.ReadWriteOwnFieldReports],
+				AttachFiles:       false,
+			},
 		}
 	}
 
