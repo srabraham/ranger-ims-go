@@ -187,7 +187,7 @@ function frInitDataTables() {
         "createdRow": function (row, fieldReport, _index) {
             row.addEventListener("click", function (_e) {
                 // Open new context with link
-                window.open(ims.urlReplace(url_viewFieldReports) + fieldReport.number, "Field_Report:" + fieldReport.number);
+                window.open(`${ims.urlReplace(url_viewFieldReports)}/${fieldReport.number}`, "Field_Report:" + fieldReport.number);
             });
             row.getElementsByClassName("field_report_created")[0]
                 .setAttribute("title", ims.fullDateTime.format(Date.parse(fieldReport.created)));

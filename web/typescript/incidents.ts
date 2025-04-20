@@ -356,7 +356,7 @@ function initDataTables(): void {
             row.addEventListener("click", function (_e: MouseEvent): void {
                 // Open new context with link
                 window.open(
-                    ims.urlReplace(url_viewIncidents) + incident.number,
+                    `${ims.urlReplace(url_viewIncidents)}/${incident.number}`,
                     "Incident:" + ims.pathIds.eventID + "#" + incident.number,
                 );
             });

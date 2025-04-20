@@ -266,23 +266,145 @@ func (q *Queries) FieldReports_ReportEntries(ctx context.Context, arg FieldRepor
 	return items, nil
 }
 
-const incidentTypes = `-- name: IncidentTypes :many
-select NAME from INCIDENT_TYPE
+const incident = `-- name: Incident :one
+select
+    i.event, i.number, i.created, i.priority, i.state, i.summary, i.location_name, i.location_concentric, i.location_radial_hour, i.location_radial_minute, i.location_description,
+    (
+        select coalesce(json_arrayagg(it.NAME), "[]")
+        from INCIDENT__INCIDENT_TYPE iit
+                 join INCIDENT_TYPE it
+                      on i.EVENT = iit.EVENT
+                          and i.NUMBER = iit.INCIDENT_NUMBER
+                          and iit.INCIDENT_TYPE = it.ID
+    ) as INCIDENT_TYPES,
+    (
+        select coalesce(json_arrayagg(irep.NUMBER), "[]")
+        from FIELD_REPORT irep
+        where i.EVENT = irep.EVENT
+          and i.NUMBER = irep.INCIDENT_NUMBER
+    ) as FIELD_REPORT_NUMBERS,
+    (
+        select coalesce(json_arrayagg(ir.RANGER_HANDLE), "[]")
+        from INCIDENT__RANGER ir
+        where i.EVENT = ir.EVENT
+          and i.NUMBER = ir.INCIDENT_NUMBER
+    ) as RANGER_HANDLES
+from INCIDENT i
+where i.EVENT = ?
+    and i.NUMBER = ?
 `
 
-func (q *Queries) IncidentTypes(ctx context.Context) ([]string, error) {
+type IncidentParams struct {
+	Event  int32
+	Number int32
+}
+
+type IncidentRow struct {
+	Incident           Incident
+	IncidentTypes      interface{}
+	FieldReportNumbers interface{}
+	RangerHandles      interface{}
+}
+
+func (q *Queries) Incident(ctx context.Context, arg IncidentParams) (IncidentRow, error) {
+	row := q.db.QueryRowContext(ctx, incident, arg.Event, arg.Number)
+	var i IncidentRow
+	err := row.Scan(
+		&i.Incident.Event,
+		&i.Incident.Number,
+		&i.Incident.Created,
+		&i.Incident.Priority,
+		&i.Incident.State,
+		&i.Incident.Summary,
+		&i.Incident.LocationName,
+		&i.Incident.LocationConcentric,
+		&i.Incident.LocationRadialHour,
+		&i.Incident.LocationRadialMinute,
+		&i.Incident.LocationDescription,
+		&i.IncidentTypes,
+		&i.FieldReportNumbers,
+		&i.RangerHandles,
+	)
+	return i, err
+}
+
+const incidentTypes = `-- name: IncidentTypes :many
+select NAME, HIDDEN from INCIDENT_TYPE
+`
+
+type IncidentTypesRow struct {
+	Name   string
+	Hidden bool
+}
+
+func (q *Queries) IncidentTypes(ctx context.Context) ([]IncidentTypesRow, error) {
 	rows, err := q.db.QueryContext(ctx, incidentTypes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []IncidentTypesRow
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var i IncidentTypesRow
+		if err := rows.Scan(&i.Name, &i.Hidden); err != nil {
 			return nil, err
 		}
-		items = append(items, name)
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const incident_ReportEntries = `-- name: Incident_ReportEntries :many
+select
+    ire.INCIDENT_NUMBER,
+    re.id, re.author, re.text, re.created, re.` + "`" + `generated` + "`" + `, re.stricken, re.attached_file
+from
+    INCIDENT__REPORT_ENTRY ire
+        join REPORT_ENTRY re
+             on re.ID = ire.REPORT_ENTRY
+where
+    ire.EVENT = ?
+    and ire.INCIDENT_NUMBER = ?
+`
+
+type Incident_ReportEntriesParams struct {
+	Event          int32
+	IncidentNumber int32
+}
+
+type Incident_ReportEntriesRow struct {
+	IncidentNumber int32
+	ReportEntry    ReportEntry
+}
+
+func (q *Queries) Incident_ReportEntries(ctx context.Context, arg Incident_ReportEntriesParams) ([]Incident_ReportEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, incident_ReportEntries, arg.Event, arg.IncidentNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Incident_ReportEntriesRow
+	for rows.Next() {
+		var i Incident_ReportEntriesRow
+		if err := rows.Scan(
+			&i.IncidentNumber,
+			&i.ReportEntry.ID,
+			&i.ReportEntry.Author,
+			&i.ReportEntry.Text,
+			&i.ReportEntry.Created,
+			&i.ReportEntry.Generated,
+			&i.ReportEntry.Stricken,
+			&i.ReportEntry.AttachedFile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

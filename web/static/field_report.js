@@ -122,7 +122,7 @@ async function loadFieldReport() {
         };
     }
     else {
-        const { json, err } = await ims.fetchJsonNoThrow(ims.urlReplace(url_fieldReports) + number, null);
+        const { json, err } = await ims.fetchJsonNoThrow(`${ims.urlReplace(url_fieldReports)}/${number}`, null);
         if (err != null) {
             ims.disableEditing();
             const message = "Failed to load field report: " + err;

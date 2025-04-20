@@ -1,6 +1,5 @@
 package json
 
-// event name as key
 type EventsAccess map[string]EventAccess
 
 type AccessRule struct {

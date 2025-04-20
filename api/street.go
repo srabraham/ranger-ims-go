@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/queries"
 	"log"
 	"net/http"
@@ -24,7 +25,7 @@ func (ga GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 
 	// eventName --> street ID --> street name
 
-	resp := make(map[string]map[string]string)
+	resp := make(imsjson.EventsStreets)
 
 	for _, event := range events {
 		streets, err := queries.New(ga.imsDB).ConcentricStreets(req.Context(), event.ID)
@@ -33,7 +34,7 @@ func (ga GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 			log.Println(err)
 			return
 		}
-		resp[event.Name] = make(map[string]string)
+		resp[event.Name] = make(imsjson.EventStreets)
 		for _, street := range streets {
 			resp[event.Name][street.ID] = street.Name
 		}

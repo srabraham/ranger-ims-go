@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/srabraham/ranger-ims-go/api/access"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
@@ -178,7 +177,7 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		permissions := access.UserPermissions(ea, ga.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+		permissions := auth.UserPermissions(ea, ga.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 
 		resp.EventAccess = map[string]AccessForEvent{
 			eventName: {

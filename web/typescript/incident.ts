@@ -212,7 +212,8 @@ async function loadIncident(): Promise<{err: string|null}> {
             "summary": "",
         };
     } else {
-        const {json, err} = await ims.fetchJsonNoThrow<ims.Incident>(ims.urlReplace(url_incidents) + number, null);
+        const {json, err} = await ims.fetchJsonNoThrow<ims.Incident>(
+            `${ims.urlReplace(url_incidents)}/${number}`, null);
         if (err != null) {
             ims.disableEditing();
             const message = `Failed to load Incident ${number}: ${err}`;

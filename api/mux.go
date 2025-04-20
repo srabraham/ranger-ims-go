@@ -53,6 +53,14 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
+		Adapt(
+			GetIncident{imsDB: db}.getIncident,
+			ExtractClaims(j),
+			RequireAuthenticated(),
+		),
+	)
+
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
 			GetFieldReports{imsDB: db}.getFieldReports,
@@ -80,6 +88,14 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
 			GetIncidentTypes{imsDB: db}.getIncidentTypes,
+			ExtractClaims(j),
+			RequireAuthenticated(),
+		),
+	)
+
+	mux.Handle("GET /ims/api/personnel",
+		Adapt(
+			GetPersonnel{clubhouseDB: clubhouseDB}.getPersonnel,
 			ExtractClaims(j),
 			RequireAuthenticated(),
 		),

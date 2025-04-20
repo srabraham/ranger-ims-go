@@ -296,7 +296,7 @@ function initDataTables() {
         "createdRow": function (row, incident, _index) {
             row.addEventListener("click", function (_e) {
                 // Open new context with link
-                window.open(ims.urlReplace(url_viewIncidents) + incident.number, "Incident:" + ims.pathIds.eventID + "#" + incident.number);
+                window.open(`${ims.urlReplace(url_viewIncidents)}/${incident.number}`, "Incident:" + ims.pathIds.eventID + "#" + incident.number);
             });
             row.getElementsByClassName("incident_created")[0]
                 .setAttribute("title", ims.fullDateTime.format(Date.parse(incident.created)));

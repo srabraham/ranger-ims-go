@@ -220,7 +220,7 @@ function frInitDataTables() {
             row.addEventListener("click", function (_e: MouseEvent): void {
                 // Open new context with link
                 window.open(
-                    ims.urlReplace(url_viewFieldReports) + fieldReport.number,
+                    `${ims.urlReplace(url_viewFieldReports)}/${fieldReport.number}`,
                     "Field_Report:" + fieldReport.number,
                 );
             });
