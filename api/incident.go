@@ -20,6 +20,7 @@ func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 
 	eventID, err := queries.New(ga.imsDB).QueryEventID(req.Context(), event)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 		return
 	}
@@ -28,6 +29,7 @@ func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 
 	reportEntries, err := queries.New(ga.imsDB).Incidents_ReportEntries(req.Context(), queries.Incidents_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 		return
 	}
@@ -56,7 +58,6 @@ func (ga GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
 
 	var garett = "garett"
 	for _, r := range rows {
-		//spew.Dump(r)
 		var incidentTypes, rangerHandles []string
 		var fieldReportNumbers []int32
 		json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)

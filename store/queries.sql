@@ -11,8 +11,8 @@ select ID, NAME from EVENT;
 insert into EVENT (NAME) values (?);
 
 -- name: EventAccess :many
-select EXPRESSION, VALIDITY from EVENT_ACCESS
-where EVENT = ? and MODE = ?;
+select EXPRESSION, MODE, VALIDITY from EVENT_ACCESS
+where EVENT = ?;
 
 -- name: CreateIncident :execlastid
 insert into INCIDENT (

@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/srabraham/ranger-ims-go/api/access"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
+	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 )
 
 type PostAuth struct {
+	imsDB       *sql.DB
 	clubhouseDB *sql.DB
 	jwtSecret   string
 	jwtDuration time.Duration
@@ -61,6 +64,7 @@ func (pa PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 }
 
 type GetAuth struct {
+	imsDB       *sql.DB
 	clubhouseDB *sql.DB
 	jwtSecret   string
 	admins      []string
@@ -90,20 +94,57 @@ func (ga GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 		w.Write(marsh)
 		return
 	}
+
 	log.Printf("got claims %v", claims)
 	sub, _ := claims.GetSubject()
 	resp := GetAuthResponse{
 		Authenticated: true,
 		User:          sub,
 		Admin:         slices.Contains(ga.admins, sub),
-		EventAccess: map[string]AccessForEvent{
-			"2023": {
-				ReadIncidents:     true,
-				WriteIncidents:    true,
-				WriteFieldReports: true,
-			},
-		},
+		//EventAccess: map[string]AccessForEvent{
+		//	"2023": {
+		//		ReadIncidents:     true,
+		//		WriteIncidents:    true,
+		//		WriteFieldReports: true,
+		//	},
+		//},
 	}
+
+	req.ParseForm()
+
+	eventName := req.Form.Get("event_id")
+	if eventName != "" {
+		ea, err := access.GetEventsAccess(req.Context(), ga.imsDB, eventName)
+		if err != nil {
+			log.Printf("failed to get events access: %v", err)
+		} else {
+
+			resp.EventAccess = map[string]AccessForEvent{
+				eventName: {
+					// TODO: need to check positions and teams as well for all three of these
+					//  and need to check validity
+					ReadIncidents: slices.ContainsFunc(ea[eventName].Readers, func(rule imsjson.AccessRule) bool {
+						return rule.Expression == "person:"+sub
+					}),
+					WriteIncidents: slices.ContainsFunc(ea[eventName].Writers, func(rule imsjson.AccessRule) bool {
+						return rule.Expression == "person:"+sub
+					}),
+					WriteFieldReports: slices.ContainsFunc(ea[eventName].Reporters, func(rule imsjson.AccessRule) bool {
+						return rule.Expression == "person:"+sub
+					}),
+					AttachFiles: false,
+				},
+			}
+			// TODO: this is ugly... don't do this
+			sillyOverride := resp.EventAccess[eventName]
+			if sillyOverride.WriteIncidents {
+				sillyOverride.ReadIncidents = true
+				sillyOverride.WriteFieldReports = true
+			}
+			resp.EventAccess[eventName] = sillyOverride
+		}
+	}
+
 	marsh, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(marsh)

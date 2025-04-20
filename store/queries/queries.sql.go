@@ -109,22 +109,18 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 }
 
 const eventAccess = `-- name: EventAccess :many
-select EXPRESSION, VALIDITY from EVENT_ACCESS
-where EVENT = ? and MODE = ?
+select EXPRESSION, MODE, VALIDITY from EVENT_ACCESS
+where EVENT = ?
 `
-
-type EventAccessParams struct {
-	Event int32
-	Mode  EventAccessMode
-}
 
 type EventAccessRow struct {
 	Expression string
+	Mode       EventAccessMode
 	Validity   EventAccessValidity
 }
 
-func (q *Queries) EventAccess(ctx context.Context, arg EventAccessParams) ([]EventAccessRow, error) {
-	rows, err := q.db.QueryContext(ctx, eventAccess, arg.Event, arg.Mode)
+func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRow, error) {
+	rows, err := q.db.QueryContext(ctx, eventAccess, event)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +128,7 @@ func (q *Queries) EventAccess(ctx context.Context, arg EventAccessParams) ([]Eve
 	var items []EventAccessRow
 	for rows.Next() {
 		var i EventAccessRow
-		if err := rows.Scan(&i.Expression, &i.Validity); err != nil {
+		if err := rows.Scan(&i.Expression, &i.Mode, &i.Validity); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

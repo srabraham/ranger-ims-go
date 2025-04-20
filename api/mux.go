@@ -12,16 +12,25 @@ import (
 func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) *http.ServeMux {
 	j := auth.JWTer{SecretKey: cfg.Core.JWTSecret}
 
-	mux.HandleFunc("POST /ims/api/auth",
+	mux.Handle("GET /ims/api/access/{$}",
+		Adapt(
+			GetEventAccesses{imsDB: db}.getEventAccesses,
+			RequireAuthenticated(j),
+		),
+	)
+
+	mux.HandleFunc("POST /ims/api/auth/{$}",
 		PostAuth{
+			imsDB:       db,
 			clubhouseDB: clubhouseDB,
 			jwtSecret:   cfg.Core.JWTSecret,
 			jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 		}.postAuth,
 	)
 
-	mux.HandleFunc("GET /ims/api/auth",
+	mux.HandleFunc("GET /ims/api/auth/{$}",
 		GetAuth{
+			imsDB:       db,
 			clubhouseDB: clubhouseDB,
 			jwtSecret:   cfg.Core.JWTSecret,
 			admins:      cfg.Core.Admins,
