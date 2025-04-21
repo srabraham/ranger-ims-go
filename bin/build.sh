@@ -24,6 +24,10 @@ for f in ${emitted}; do
 done
 echo "finished tsc"
 
+echo "fetching external deps"
+cd "${reporoot}"
+bin/fetch_client_deps.sh
+
 echo "building ranger-ims-go"
 cd "${reporoot}"
 go build
