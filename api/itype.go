@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/queries"
 	"log"
 	"log/slog"
@@ -13,8 +14,6 @@ import (
 type GetIncidentTypes struct {
 	imsDB *sql.DB
 }
-
-type GetIncidentTypesResponse []string
 
 func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
@@ -33,7 +32,7 @@ func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	result := make(GetIncidentTypesResponse, 0)
+	result := make(imsjson.IncidentTypes, 0)
 	for _, typeRow := range typeRows {
 		t := typeRow.IncidentType
 		if includeHidden || !t.Hidden {

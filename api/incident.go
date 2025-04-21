@@ -16,28 +16,29 @@ type GetIncidents struct {
 	imsDB *sql.DB
 }
 
-type GetIncidentsResponse []imsjson.Incident
-
 func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
-	if err := req.ParseForm(); err != nil {
-		slog.Error("Failed to parse form", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	if !parseForm(w, req) {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	eventName := req.PathValue("eventName")
-
-	eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
-	if err != nil {
-		slog.Error("Failed to get event ID", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	event, success := eventFromPathValue(w, req, hand.imsDB)
+	if !success {
 		return
 	}
 
+	//eventName := req.PathValue("eventName")
+	//
+	//eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+	//if err != nil {
+	//	slog.Error("Failed to get event ID", "error", err)
+	//	w.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
+
 	reportEntries, err := queries.New(hand.imsDB).Incidents_ReportEntries(req.Context(),
 		queries.Incidents_ReportEntriesParams{
-			Event:     eventRow.Event.ID,
+			Event:     event.ID,
 			Generated: generatedLTE,
 		})
 	if err != nil {
@@ -60,23 +61,24 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
-	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), eventRow.Event.ID)
+	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	resp := make(GetIncidentsResponse, 0)
+	resp := make(imsjson.Incidents, 0)
 
 	var garett = "garett"
 	for _, r := range rows {
-		var incidentTypes, rangerHandles []string
+		var incidentTypes imsjson.IncidentTypes
+		var rangerHandles []string
 		var fieldReportNumbers []int32
 		json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
 		json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
 		json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 		resp = append(resp, imsjson.Incident{
-			Event:   ptr(eventRow.Event.Name),
+			Event:   ptr(event.Name),
 			Number:  ptr(r.Incident.Number),
 			Created: ptr(time.Unix(int64(r.Incident.Created), 0)),
 			// TODO: should look at report entries too
@@ -173,7 +175,8 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		)
 	}
 
-	var incidentTypes, rangerHandles []string
+	var incidentTypes imsjson.IncidentTypes
+	var rangerHandles []string
 	var fieldReportNumbers []int32
 	json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
 	json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)

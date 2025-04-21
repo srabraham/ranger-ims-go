@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+type Incidents []Incident
+
 type Location struct {
 	Name         *string `json:"name"`
 	Concentric   *string `json:"concentric"`
@@ -32,7 +34,7 @@ type Incident struct {
 	Priority      *int8          `json:"priority"`
 	Summary       *string        `json:"summary"`
 	Location      *Location      `json:"location"`
-	IncidentTypes *[]string      `json:"incident_types"`
+	IncidentTypes *IncidentTypes `json:"incident_types"`
 	FieldReports  *[]int32       `json:"field_reports"`
 	RangerHandles *[]string      `json:"ranger_handles"`
 	ReportEntries *[]ReportEntry `json:"report_entries"`

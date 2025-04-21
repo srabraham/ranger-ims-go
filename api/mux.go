@@ -224,6 +224,15 @@ func RequireAuthenticated() Adapter {
 	}
 }
 
+//
+//func ParseForm() Adapter {
+//	return func(next http.Handler) http.Handler {
+//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//
+//		})
+//	}
+//}
+
 func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []string) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
