@@ -33,26 +33,25 @@ func (hand GetEventAccesses) getEventAccesses(w http.ResponseWriter, req *http.R
 func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
 	var events []queries.Event
 	if eventName != "" {
-		eventID, err := queries.New(imsDB).QueryEventID(ctx, eventName)
+		eventRow, err := queries.New(imsDB).QueryEventID(ctx, eventName)
 		if err != nil {
 			return nil, fmt.Errorf("[QueryEventID]: %w", err)
 		}
-		events = append(events, queries.Event{
-			ID:   eventID,
-			Name: eventName,
-		})
+		events = append(events, eventRow.Event)
 	} else {
-		allEvents, err := queries.New(imsDB).Events(ctx)
+		allEventRows, err := queries.New(imsDB).Events(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("[Events]: %w", err)
 		}
-		events = append(events, allEvents...)
+		for _, aer := range allEventRows {
+			events = append(events, aer.Event)
+		}
 	}
 
 	resp := make(imsjson.EventsAccess)
 
 	for _, e := range events {
-		accesses, err := queries.New(imsDB).EventAccess(ctx, e.ID)
+		accessRows, err := queries.New(imsDB).EventAccess(ctx, e.ID)
 		if err != nil {
 			return nil, fmt.Errorf("[EventAccess]: %w", err)
 		}
@@ -61,7 +60,8 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 			Writers:   []imsjson.AccessRule{},
 			Reporters: []imsjson.AccessRule{},
 		}
-		for _, access := range accesses {
+		for _, accessRow := range accessRows {
+			access := accessRow.EventAccess
 			rule := imsjson.AccessRule{Expression: access.Expression, Validity: string(access.Validity)}
 			switch access.Mode {
 			case queries.EventAccessModeRead:

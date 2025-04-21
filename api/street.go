@@ -24,21 +24,23 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 	}
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
-		eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+		eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
 		if err != nil {
 			slog.Error("Failed to get event ID", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		events = append(events, queries.Event{ID: eventID, Name: eventName})
+		events = append(events, queries.Event{ID: eventRow.Event.ID, Name: eventName})
 	} else {
-		eventsFromDB, err := queries.New(hand.imsDB).Events(req.Context())
+		eventRows, err := queries.New(hand.imsDB).Events(req.Context())
 		if err != nil {
 			slog.Error("Failed to get events", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		events = append(events, eventsFromDB...)
+		for _, er := range eventRows {
+			events = append(events, er.Event)
+		}
 	}
 
 	// eventName --> street ID --> street name
@@ -53,7 +55,7 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 		}
 		resp[event.Name] = make(imsjson.EventStreets)
 		for _, street := range streets {
-			resp[event.Name][street.ID] = street.Name
+			resp[event.Name][street.ConcentricStreet.ID] = street.ConcentricStreet.Name
 		}
 	}
 	jjj, _ := json.Marshal(resp)

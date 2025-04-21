@@ -77,7 +77,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events",
 		Adapt(
-			GetEvents{imsDB: db}.getEvents,
+			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins}.getEvents,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 		),

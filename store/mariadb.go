@@ -6,6 +6,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"log"
+	"log/slog"
 )
 
 func MariaDB() *sql.DB {
@@ -27,6 +28,6 @@ func MariaDB() *sql.DB {
 	if pingErr != nil {
 		log.Fatal(pingErr)
 	}
-	fmt.Println("Connected!")
+	slog.Info("Connected to IMS MariaDB")
 	return db
 }

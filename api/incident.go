@@ -19,19 +19,27 @@ type GetIncidents struct {
 type GetIncidentsResponse []imsjson.Incident
 
 func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseForm(); err != nil {
+		slog.Error("Failed to parse form", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event := req.PathValue("eventName")
+	eventName := req.PathValue("eventName")
 
-	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
+	eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	generatedLTE := false // false should mean to exclude
-
-	reportEntries, err := queries.New(hand.imsDB).Incidents_ReportEntries(req.Context(), queries.Incidents_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
+	reportEntries, err := queries.New(hand.imsDB).Incidents_ReportEntries(req.Context(),
+		queries.Incidents_ReportEntriesParams{
+			Event:     eventRow.Event.ID,
+			Generated: generatedLTE,
+		})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
@@ -52,7 +60,7 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
-	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), event)
+	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), eventRow.Event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -68,8 +76,7 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 		json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
 		json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 		resp = append(resp, imsjson.Incident{
-			// TODO: use event from the db, not the request
-			Event:   ptr(event),
+			Event:   ptr(eventRow.Event.Name),
 			Number:  ptr(r.Incident.Number),
 			Created: ptr(time.Unix(int64(r.Incident.Created), 0)),
 			// TODO: should look at report entries too
@@ -111,35 +118,38 @@ type GetIncidentResponse imsjson.Incident
 
 func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 
-	event := req.PathValue("eventName")
+	eventName := req.PathValue("eventName")
 	incident := req.PathValue("incidentNumber")
 
-	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
+	eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
-		slog.Error("Failed to get event ID", "error", err)
+		slog.Error("Failed to get eventRow ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	incidentNumber, err := strconv.ParseInt(incident, 10, 32)
 	if err != nil {
-		slog.ErrorContext(req.Context(), "Got nonnumeric incident number", err)
+		slog.Error("Got nonnumeric incident number", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	r, err := queries.New(hand.imsDB).Incident(req.Context(), queries.IncidentParams{
-		Event:  eventID,
+		Event:  eventRow.Event.ID,
 		Number: int32(incidentNumber),
 	})
 	if err != nil {
-		slog.ErrorContext(req.Context(), "Failed to read incident", err)
+		slog.Error("Failed to read incident", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	reportEntries, err := queries.New(hand.imsDB).Incident_ReportEntries(req.Context(),
-		queries.Incident_ReportEntriesParams{Event: eventID, IncidentNumber: int32(incidentNumber)},
+		queries.Incident_ReportEntriesParams{
+			Event:          eventRow.Event.ID,
+			IncidentNumber: int32(incidentNumber),
+		},
 	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -171,8 +181,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 
 	var garett = "garett"
 	result := GetIncidentResponse{
-		// TODO: use event from the db, not the request
-		Event:   ptr(event),
+		Event:   ptr(eventRow.Event.Name),
 		Number:  ptr(r.Incident.Number),
 		Created: ptr(time.Unix(int64(r.Incident.Created), 0)),
 		// TODO: should look at report entries too

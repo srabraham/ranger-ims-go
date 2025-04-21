@@ -1,17 +1,18 @@
 -- name: QueryEventID :one
-select ID from EVENT where NAME = ?;
+select sqlc.embed(EVENT) from EVENT where NAME = ?;
 
 -- name: SchemaVersion :one
 select VERSION from SCHEMA_INFO;
 
 -- name: Events :many
-select ID, NAME from EVENT;
+select sqlc.embed(EVENT) from EVENT;
 
 -- name: CreateEvent :execlastid
 insert into EVENT (NAME) values (?);
 
 -- name: EventAccess :many
-select EXPRESSION, MODE, VALIDITY from EVENT_ACCESS
+select sqlc.embed(EVENT_ACCESS)
+from EVENT_ACCESS
 where EVENT = ?;
 
 -- name: CreateIncident :execlastid
@@ -85,7 +86,7 @@ select
 from
     INCIDENT i
 where
-    i.EVENT = (select e.ID from EVENT e where e.NAME = ?)
+    i.EVENT = ?
 group by
     i.NUMBER;
 
@@ -116,19 +117,18 @@ where
 ;
 
 -- name: ConcentricStreets :many
-select ID, NAME from CONCENTRIC_STREET
+select sqlc.embed(CONCENTRIC_STREET)
+from CONCENTRIC_STREET
 where EVENT = ?;
 
 -- name: IncidentTypes :many
-select NAME, HIDDEN from INCIDENT_TYPE;
+select sqlc.embed(INCIDENT_TYPE)
+from INCIDENT_TYPE;
 
 -- name: FieldReports :many
-select
-    sqlc.embed(FIELD_REPORT)
-from
-    FIELD_REPORT
-where
-    EVENT = ?;
+select sqlc.embed(FIELD_REPORT)
+from FIELD_REPORT
+where EVENT = ?;
 
 -- name: FieldReports_ReportEntries :many
 select
@@ -140,4 +140,5 @@ from
              on irre.REPORT_ENTRY = re.ID
 where
     irre.EVENT = ?
-    and re.GENERATED <= ?;
+    and re.GENERATED <= ?
+;

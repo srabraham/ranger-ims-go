@@ -26,7 +26,7 @@ func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.R
 	if req.Form.Get("hidden") == "true" {
 		includeHidden = true
 	}
-	types, err := queries.New(hand.imsDB).IncidentTypes(req.Context())
+	typeRows, err := queries.New(hand.imsDB).IncidentTypes(req.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
@@ -34,7 +34,8 @@ func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.R
 	}
 
 	result := make(GetIncidentTypesResponse, 0)
-	for _, t := range types {
+	for _, typeRow := range typeRows {
+		t := typeRow.IncidentType
 		if includeHidden || !t.Hidden {
 			result = append(result, t.Name)
 		}

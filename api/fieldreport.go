@@ -18,19 +18,25 @@ type GetFieldReports struct {
 type GetFieldReportsResponse []imsjson.FieldReport
 
 func (hand GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseForm(); err != nil {
+		slog.Error("Failed to parse form", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event := req.PathValue("eventName")
-
-	eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), event)
+	eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), req.PathValue("eventName"))
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	generatedLTE := false // false should mean to exclude
-
-	reportEntries, err := queries.New(hand.imsDB).FieldReports_ReportEntries(req.Context(), queries.FieldReports_ReportEntriesParams{Event: eventID, Generated: generatedLTE})
+	reportEntries, err := queries.New(hand.imsDB).FieldReports_ReportEntries(req.Context(),
+		queries.FieldReports_ReportEntriesParams{
+			Event:     eventRow.Event.ID,
+			Generated: generatedLTE,
+		})
 	if err != nil {
 		log.Println(err)
 		return
@@ -50,7 +56,7 @@ func (hand GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Req
 		})
 	}
 
-	rows, err := queries.New(hand.imsDB).FieldReports(req.Context(), eventID)
+	rows, err := queries.New(hand.imsDB).FieldReports(req.Context(), eventRow.Event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -61,8 +67,7 @@ func (hand GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Req
 	for _, r := range rows {
 		fr := r.FieldReport
 		resp = append(resp, imsjson.FieldReport{
-			// TODO: use event from the db, not the request
-			Event:    ptr(event),
+			Event:    ptr(eventRow.Event.Name),
 			Number:   ptr(fr.Number),
 			Created:  ptr(time.Unix(int64(fr.Created), 0)),
 			Summary:  stringOrNil(fr.Summary),

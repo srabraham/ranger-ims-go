@@ -22,6 +22,7 @@ const (
 type Permission string
 
 const (
+	ReadEventName        Permission = "ReadEventName"
 	ReadIncidents        Permission = "ReadIncidents"
 	WriteIncidents       Permission = "WriteIncidents"
 	ReadAllFieldReports  Permission = "ReadAllFieldReports"
@@ -34,16 +35,19 @@ const (
 
 var RolesToPerms = map[Role]map[Permission]bool{
 	EventReporter: {
+		ReadEventName:        true,
 		WriteOwnFieldReports: true,
 		ReadOwnFieldReports:  true,
 	},
 	EventReader: {
+		ReadEventName:       true,
 		ReadIncidents:       true,
 		ReadAllFieldReports: true,
 		ReadOwnFieldReports: true,
 		ReadPersonnel:       true,
 	},
 	EventWriter: {
+		ReadEventName:        true,
 		ReadIncidents:        true,
 		WriteIncidents:       true,
 		ReadAllFieldReports:  true,
@@ -64,20 +68,25 @@ func UserPermissions2(
 	imsAdmins []string,
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
-	eventID, err := queries.New(imsDB).QueryEventID(ctx, eventName)
+	eventRow, err := queries.New(imsDB).QueryEventID(ctx, eventName)
 	if err != nil {
 		return nil, fmt.Errorf("QueryEventID: %w", err)
 	}
-	ea, err := queries.New(imsDB).EventAccess(ctx, eventID)
+	accessRows, err := queries.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
 	if err != nil {
 		return nil, fmt.Errorf("EventAccess: %w", err)
 	}
-	permissions := UserPermissions(ea, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+	var eventAccesses []queries.EventAccess
+	for _, ea := range accessRows {
+		eventAccesses = append(eventAccesses, ea.EventAccess)
+	}
+
+	permissions := UserPermissions(eventAccesses, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 	return permissions, nil
 }
 
 func UserPermissions(
-	ea []queries.EventAccessRow, // all for the same event, or nil for no event
+	eventAccesses []queries.EventAccess, // all for the same event, or nil for no event
 	imsAdmins []string,
 	handle string,
 	onsite bool,
@@ -96,32 +105,32 @@ func UserPermissions(
 		maps.Copy(perms, RolesToPerms[Administrator])
 	}
 
-	for _, access := range ea {
+	for _, ea := range eventAccesses {
 		matchExpr := false
-		if access.Expression == "*" {
+		if ea.Expression == "*" {
 			matchExpr = true
 		}
-		if strings.HasPrefix(access.Expression, "person:") &&
-			strings.TrimPrefix(access.Expression, "person:") == handle {
+		if strings.HasPrefix(ea.Expression, "person:") &&
+			strings.TrimPrefix(ea.Expression, "person:") == handle {
 			matchExpr = true
 		}
-		if strings.HasPrefix(access.Expression, "position:") &&
-			slices.Contains(positions, strings.TrimPrefix(access.Expression, "position:")) {
+		if strings.HasPrefix(ea.Expression, "position:") &&
+			slices.Contains(positions, strings.TrimPrefix(ea.Expression, "position:")) {
 			matchExpr = true
 		}
-		if strings.HasPrefix(access.Expression, "team:") &&
-			slices.Contains(teams, strings.TrimPrefix(access.Expression, "team:")) {
+		if strings.HasPrefix(ea.Expression, "team:") &&
+			slices.Contains(teams, strings.TrimPrefix(ea.Expression, "team:")) {
 			matchExpr = true
 		}
 		matchValidity := false
-		if access.Validity == queries.EventAccessValidityAlways {
+		if ea.Validity == queries.EventAccessValidityAlways {
 			matchValidity = true
 		}
-		if access.Validity == queries.EventAccessValidityOnsite && onsite {
+		if ea.Validity == queries.EventAccessValidityOnsite && onsite {
 			matchValidity = true
 		}
 		if matchExpr && matchValidity {
-			maps.Copy(perms, RolesToPerms[translate[access.Mode]])
+			maps.Copy(perms, RolesToPerms[translate[ea.Mode]])
 		}
 	}
 	return perms

@@ -11,13 +11,13 @@ import (
 )
 
 const concentricStreets = `-- name: ConcentricStreets :many
-select ID, NAME from CONCENTRIC_STREET
+select concentric_street.event, concentric_street.id, concentric_street.name
+from CONCENTRIC_STREET
 where EVENT = ?
 `
 
 type ConcentricStreetsRow struct {
-	ID   string
-	Name string
+	ConcentricStreet ConcentricStreet
 }
 
 func (q *Queries) ConcentricStreets(ctx context.Context, event int32) ([]ConcentricStreetsRow, error) {
@@ -29,7 +29,7 @@ func (q *Queries) ConcentricStreets(ctx context.Context, event int32) ([]Concent
 	var items []ConcentricStreetsRow
 	for rows.Next() {
 		var i ConcentricStreetsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ConcentricStreet.Event, &i.ConcentricStreet.ID, &i.ConcentricStreet.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -109,14 +109,13 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 }
 
 const eventAccess = `-- name: EventAccess :many
-select EXPRESSION, MODE, VALIDITY from EVENT_ACCESS
+select event_access.id, event_access.event, event_access.expression, event_access.mode, event_access.validity
+from EVENT_ACCESS
 where EVENT = ?
 `
 
 type EventAccessRow struct {
-	Expression string
-	Mode       EventAccessMode
-	Validity   EventAccessValidity
+	EventAccess EventAccess
 }
 
 func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRow, error) {
@@ -128,7 +127,13 @@ func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRo
 	var items []EventAccessRow
 	for rows.Next() {
 		var i EventAccessRow
-		if err := rows.Scan(&i.Expression, &i.Mode, &i.Validity); err != nil {
+		if err := rows.Scan(
+			&i.EventAccess.ID,
+			&i.EventAccess.Event,
+			&i.EventAccess.Expression,
+			&i.EventAccess.Mode,
+			&i.EventAccess.Validity,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -143,19 +148,23 @@ func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRo
 }
 
 const events = `-- name: Events :many
-select ID, NAME from EVENT
+select event.id, event.name from EVENT
 `
 
-func (q *Queries) Events(ctx context.Context) ([]Event, error) {
+type EventsRow struct {
+	Event Event
+}
+
+func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
 	rows, err := q.db.QueryContext(ctx, events)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Event
+	var items []EventsRow
 	for rows.Next() {
-		var i Event
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		var i EventsRow
+		if err := rows.Scan(&i.Event.ID, &i.Event.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -170,12 +179,9 @@ func (q *Queries) Events(ctx context.Context) ([]Event, error) {
 }
 
 const fieldReports = `-- name: FieldReports :many
-select
-    field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
-from
-    FIELD_REPORT
-where
-    EVENT = ?
+select field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
+from FIELD_REPORT
+where EVENT = ?
 `
 
 type FieldReportsRow struct {
@@ -329,12 +335,12 @@ func (q *Queries) Incident(ctx context.Context, arg IncidentParams) (IncidentRow
 }
 
 const incidentTypes = `-- name: IncidentTypes :many
-select NAME, HIDDEN from INCIDENT_TYPE
+select incident_type.id, incident_type.name, incident_type.hidden
+from INCIDENT_TYPE
 `
 
 type IncidentTypesRow struct {
-	Name   string
-	Hidden bool
+	IncidentType IncidentType
 }
 
 func (q *Queries) IncidentTypes(ctx context.Context) ([]IncidentTypesRow, error) {
@@ -346,7 +352,7 @@ func (q *Queries) IncidentTypes(ctx context.Context) ([]IncidentTypesRow, error)
 	var items []IncidentTypesRow
 	for rows.Next() {
 		var i IncidentTypesRow
-		if err := rows.Scan(&i.Name, &i.Hidden); err != nil {
+		if err := rows.Scan(&i.IncidentType.ID, &i.IncidentType.Name, &i.IncidentType.Hidden); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -441,7 +447,7 @@ select
 from
     INCIDENT i
 where
-    i.EVENT = (select e.ID from EVENT e where e.NAME = ?)
+    i.EVENT = ?
 group by
     i.NUMBER
 `
@@ -453,8 +459,8 @@ type IncidentsRow struct {
 	RangerHandles      interface{}
 }
 
-func (q *Queries) Incidents(ctx context.Context, name string) ([]IncidentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, incidents, name)
+func (q *Queries) Incidents(ctx context.Context, event int32) ([]IncidentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, incidents, event)
 	if err != nil {
 		return nil, err
 	}
@@ -547,14 +553,18 @@ func (q *Queries) Incidents_ReportEntries(ctx context.Context, arg Incidents_Rep
 }
 
 const queryEventID = `-- name: QueryEventID :one
-select ID from EVENT where NAME = ?
+select event.id, event.name from EVENT where NAME = ?
 `
 
-func (q *Queries) QueryEventID(ctx context.Context, name string) (int32, error) {
+type QueryEventIDRow struct {
+	Event Event
+}
+
+func (q *Queries) QueryEventID(ctx context.Context, name string) (QueryEventIDRow, error) {
 	row := q.db.QueryRowContext(ctx, queryEventID, name)
-	var id int32
-	err := row.Scan(&id)
-	return id, err
+	var i QueryEventIDRow
+	err := row.Scan(&i.Event.ID, &i.Event.Name)
+	return i, err
 }
 
 const schemaVersion = `-- name: SchemaVersion :one
