@@ -2,8 +2,11 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -178,8 +181,11 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 			Event:          event.ID,
 			Number:         int32(fieldReportNumber),
 		})
-		slog.Info("attached FR to incident", "event", event.ID, "incident", incident, "FR", fieldReportNumber)
+		slog.Info("attached FR to incident", "event", event.ID, "incident", incident.Int32, "FR", fieldReportNumber)
 	}
+
+	//defer req.Body.Close()
+	//bod, _ := io.ReadAll(req.Body)
 
 	//event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	//if !ok {
@@ -190,4 +196,78 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 func (action EditFieldReport) attachToIncident(w http.ResponseWriter, req *http.Request) {
 
+}
+
+type NewFieldReport struct {
+	imsDB *sql.DB
+}
+
+func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	//if ok := parseForm(w, req); !ok {
+	//	return
+	//}
+
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	if !ok {
+		return
+	}
+
+	bod, _ := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	fr := imsjson.FieldReport{}
+	_ = json.Unmarshal(bod, &fr)
+
+	if fr.Incident != nil {
+		slog.Error("New FR may not be attached to an incident", "incident", fr.Incident)
+		http.Error(w, "New FR may not be attached to an incident", http.StatusBadRequest)
+		return
+	}
+
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
+	numUntyped, _ := imsdb.New(action.imsDB).MaxFieldReportNumber(ctx, event.ID)
+	newFrNum := numUntyped.(int64) + 1
+
+	txn, _ := action.imsDB.Begin()
+	defer txn.Rollback()
+
+	_ = imsdb.New(action.imsDB).WithTx(txn).CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
+		Event:          event.ID,
+		Number:         int32(newFrNum),
+		Created:        float64(time.Now().Unix()),
+		Summary:        sqlNullString(fr.Summary),
+		IncidentNumber: sql.NullInt32{},
+	})
+
+	reID, _ := imsdb.New(action.imsDB).WithTx(txn).CreateReportEntry(ctx, imsdb.CreateReportEntryParams{
+		Author:       author,
+		Text:         "Created report with summary " + fmt.Sprint(fr.Summary),
+		Created:      float64(time.Now().Unix()),
+		Generated:    true,
+		Stricken:     false,
+		AttachedFile: sql.NullString{},
+	})
+
+	_ = imsdb.New(action.imsDB).WithTx(txn).AttachReportEntryToFieldReport(ctx, imsdb.AttachReportEntryToFieldReportParams{
+		Event:             event.ID,
+		FieldReportNumber: int32(newFrNum),
+		ReportEntry:       int32(reID),
+	})
+
+	if err := txn.Commit(); err != nil {
+		panic(err)
+	}
+
+	w.Header().Set("X-IMS-Field-Report-Number", strconv.FormatInt(newFrNum, 10))
+	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/field_reports/"+strconv.FormatInt(newFrNum, 10))
+	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
+}
+
+func sqlNullString(s *string) sql.NullString {
+	if s == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *s, Valid: true}
 }

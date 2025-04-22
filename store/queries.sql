@@ -179,5 +179,41 @@ set INCIDENT_NUMBER = ?
 where EVENT = ? and NUMBER = ?
 ;
 
+-- name: MaxFieldReportNumber :one
+select coalesce(max(NUMBER), 0) from FIELD_REPORT
+where EVENT = ?;
 
+-- name: CreateFieldReport :exec
+insert into FIELD_REPORT (
+    EVENT, NUMBER, CREATED, SUMMARY, INCIDENT_NUMBER
+)
+values (?, ?, ?, ?, ?);
 
+-- name: DetachedFieldReportNumbers :many
+select NUMBER from FIELD_REPORT
+where EVENT = ? and INCIDENT_NUMBER is null;
+
+-- name: AttachedFieldReportNumbers :many
+select NUMBER from FIELD_REPORT
+where
+    EVENT = ? and
+    INCIDENT_NUMBER = ?;
+
+-- name: UpdateFieldReport :exec
+update FIELD_REPORT
+set SUMMARY = ?, INCIDENT_NUMBER = ?
+where EVENT = ? and NUMBER = ?;
+
+-- name: CreateReportEntry :execlastid
+insert into REPORT_ENTRY (
+    AUTHOR, TEXT, CREATED, `GENERATED`, STRICKEN, ATTACHED_FILE
+) values (
+   ?, ?, ?, ?, ?, ?
+);
+
+-- name: AttachReportEntryToFieldReport :exec
+insert into FIELD_REPORT__REPORT_ENTRY (
+    EVENT, FIELD_REPORT_NUMBER, REPORT_ENTRY
+) values (
+    ?, ?, ?
+);

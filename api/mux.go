@@ -95,6 +95,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.Handle("POST /ims/api/events/{eventName}/field_reports",
+		Adapt(
+			NewFieldReport{imsDB: db},
+			LogBeforeAfter(),
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.WriteFieldReports, db, cfg.Core.Admins),
+		),
+	)
+
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
 			GetFieldReport{imsDB: db},

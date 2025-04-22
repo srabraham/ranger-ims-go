@@ -52,6 +52,60 @@ func (q *Queries) AttachFieldReportToIncident(ctx context.Context, arg AttachFie
 	return err
 }
 
+const attachReportEntryToFieldReport = `-- name: AttachReportEntryToFieldReport :exec
+insert into FIELD_REPORT__REPORT_ENTRY (
+    EVENT, FIELD_REPORT_NUMBER, REPORT_ENTRY
+) values (
+    ?, ?, ?
+)
+`
+
+type AttachReportEntryToFieldReportParams struct {
+	Event             int32
+	FieldReportNumber int32
+	ReportEntry       int32
+}
+
+func (q *Queries) AttachReportEntryToFieldReport(ctx context.Context, arg AttachReportEntryToFieldReportParams) error {
+	_, err := q.db.ExecContext(ctx, attachReportEntryToFieldReport, arg.Event, arg.FieldReportNumber, arg.ReportEntry)
+	return err
+}
+
+const attachedFieldReportNumbers = `-- name: AttachedFieldReportNumbers :many
+select NUMBER from FIELD_REPORT
+where
+    EVENT = ? and
+    INCIDENT_NUMBER = ?
+`
+
+type AttachedFieldReportNumbersParams struct {
+	Event          int32
+	IncidentNumber sql.NullInt32
+}
+
+func (q *Queries) AttachedFieldReportNumbers(ctx context.Context, arg AttachedFieldReportNumbersParams) ([]int32, error) {
+	rows, err := q.db.QueryContext(ctx, attachedFieldReportNumbers, arg.Event, arg.IncidentNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int32
+	for rows.Next() {
+		var number int32
+		if err := rows.Scan(&number); err != nil {
+			return nil, err
+		}
+		items = append(items, number)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const clearEventAccessForExpression = `-- name: ClearEventAccessForExpression :exec
 delete from EVENT_ACCESS
 where EVENT = ? and EXPRESSION = ?
@@ -127,6 +181,32 @@ func (q *Queries) CreateEvent(ctx context.Context, name string) (int64, error) {
 	return result.LastInsertId()
 }
 
+const createFieldReport = `-- name: CreateFieldReport :exec
+insert into FIELD_REPORT (
+    EVENT, NUMBER, CREATED, SUMMARY, INCIDENT_NUMBER
+)
+values (?, ?, ?, ?, ?)
+`
+
+type CreateFieldReportParams struct {
+	Event          int32
+	Number         int32
+	Created        float64
+	Summary        sql.NullString
+	IncidentNumber sql.NullInt32
+}
+
+func (q *Queries) CreateFieldReport(ctx context.Context, arg CreateFieldReportParams) error {
+	_, err := q.db.ExecContext(ctx, createFieldReport,
+		arg.Event,
+		arg.Number,
+		arg.Created,
+		arg.Summary,
+		arg.IncidentNumber,
+	)
+	return err
+}
+
 const createIncident = `-- name: CreateIncident :execlastid
 insert into INCIDENT (
     EVENT,
@@ -178,6 +258,66 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 		return 0, err
 	}
 	return result.LastInsertId()
+}
+
+const createReportEntry = `-- name: CreateReportEntry :execlastid
+insert into REPORT_ENTRY (
+    AUTHOR, TEXT, CREATED, ` + "`" + `GENERATED` + "`" + `, STRICKEN, ATTACHED_FILE
+) values (
+   ?, ?, ?, ?, ?, ?
+)
+`
+
+type CreateReportEntryParams struct {
+	Author       string
+	Text         string
+	Created      float64
+	Generated    bool
+	Stricken     bool
+	AttachedFile sql.NullString
+}
+
+func (q *Queries) CreateReportEntry(ctx context.Context, arg CreateReportEntryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, createReportEntry,
+		arg.Author,
+		arg.Text,
+		arg.Created,
+		arg.Generated,
+		arg.Stricken,
+		arg.AttachedFile,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+const detachedFieldReportNumbers = `-- name: DetachedFieldReportNumbers :many
+select NUMBER from FIELD_REPORT
+where EVENT = ? and INCIDENT_NUMBER is null
+`
+
+func (q *Queries) DetachedFieldReportNumbers(ctx context.Context, event int32) ([]int32, error) {
+	rows, err := q.db.QueryContext(ctx, detachedFieldReportNumbers, event)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int32
+	for rows.Next() {
+		var number int32
+		if err := rows.Scan(&number); err != nil {
+			return nil, err
+		}
+		items = append(items, number)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const eventAccess = `-- name: EventAccess :many
@@ -705,6 +845,18 @@ func (q *Queries) Incidents_ReportEntries(ctx context.Context, arg Incidents_Rep
 	return items, nil
 }
 
+const maxFieldReportNumber = `-- name: MaxFieldReportNumber :one
+select coalesce(max(NUMBER), 0) from FIELD_REPORT
+where EVENT = ?
+`
+
+func (q *Queries) MaxFieldReportNumber(ctx context.Context, event int32) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, maxFieldReportNumber, event)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
+}
+
 const queryEventID = `-- name: QueryEventID :one
 select e.id, e.name from EVENT e where e.NAME = ?
 `
@@ -729,4 +881,27 @@ func (q *Queries) SchemaVersion(ctx context.Context) (int16, error) {
 	var version int16
 	err := row.Scan(&version)
 	return version, err
+}
+
+const updateFieldReport = `-- name: UpdateFieldReport :exec
+update FIELD_REPORT
+set SUMMARY = ?, INCIDENT_NUMBER = ?
+where EVENT = ? and NUMBER = ?
+`
+
+type UpdateFieldReportParams struct {
+	Summary        sql.NullString
+	IncidentNumber sql.NullInt32
+	Event          int32
+	Number         int32
+}
+
+func (q *Queries) UpdateFieldReport(ctx context.Context, arg UpdateFieldReportParams) error {
+	_, err := q.db.ExecContext(ctx, updateFieldReport,
+		arg.Summary,
+		arg.IncidentNumber,
+		arg.Event,
+		arg.Number,
+	)
+	return err
 }

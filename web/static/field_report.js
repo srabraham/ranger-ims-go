@@ -260,7 +260,7 @@ async function frSendEdits(edits) {
         ims.pathIds.fieldReportNumber = fieldReport.number = newAsNumber;
         // Update browser history to update URL
         drawTitle();
-        window.history.pushState(null, document.title, ims.urlReplace(url_viewFieldReports) + newNumber);
+        window.history.pushState(null, document.title, `${ims.urlReplace(url_viewFieldReports)}/${newNumber}`);
     }
     await loadAndDisplayFieldReport();
     return { err: null };
@@ -303,7 +303,7 @@ async function makeIncident() {
     }
     fieldReport.incident = ims.parseInt10(newNum);
     // Attach this FR to that new incident
-    const attachToIncidentUrl = `${ims.urlReplace(url_fieldReports)}${fieldReport.number}` +
+    const attachToIncidentUrl = `${ims.urlReplace(url_fieldReports)}/${fieldReport.number}` +
         `?action=attach&incident=${fieldReport.incident}`;
     const { err: attachErr } = await ims.fetchJsonNoThrow(attachToIncidentUrl, {
         body: JSON.stringify({}),

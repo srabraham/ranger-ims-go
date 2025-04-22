@@ -317,7 +317,7 @@ async function frSendEdits(edits: ims.FieldReport): Promise<{err:string|null}> {
         drawTitle();
         window.history.pushState(
             null, document.title,
-            ims.urlReplace(url_viewFieldReports) + newNumber
+            `${ims.urlReplace(url_viewFieldReports)}/${newNumber}`
         );
     }
 
@@ -369,7 +369,7 @@ async function makeIncident(): Promise<void> {
 
     // Attach this FR to that new incident
     const attachToIncidentUrl =
-        `${ims.urlReplace(url_fieldReports)}${fieldReport.number}` +
+        `${ims.urlReplace(url_fieldReports)}/${fieldReport.number}` +
         `?action=attach&incident=${fieldReport.incident}`;
     const {err: attachErr} = await ims.fetchJsonNoThrow(attachToIncidentUrl, {
         body: JSON.stringify({}),
