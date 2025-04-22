@@ -2,7 +2,7 @@ package api
 
 import (
 	"database/sql"
-	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
+	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/clubhousedb"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"log/slog"
 	"net/http"

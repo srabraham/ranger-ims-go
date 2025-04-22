@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -15,12 +15,12 @@ type GetIncidentTypes struct {
 
 func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.Request) {
 	response := make(imsjson.IncidentTypes, 0)
-	
+
 	if success := parseForm(w, req); !success {
 		return
 	}
 	includeHidden := req.Form.Get("hidden") == "true"
-	typeRows, err := queries.New(hand.imsDB).IncidentTypes(req.Context())
+	typeRows, err := imsdb.New(hand.imsDB).IncidentTypes(req.Context())
 	if err != nil {
 		slog.Error("IncidentTypes query", "error", err)
 		http.Error(w, "IncidentTypes query failed", http.StatusInternalServerError)

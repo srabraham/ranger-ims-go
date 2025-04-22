@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"io"
 	"log/slog"
 	"net/http"
@@ -45,36 +45,36 @@ func readBody(w http.ResponseWriter, req *http.Request) (bytes []byte, success b
 //	return eventRow.Event, true
 //}
 
-func eventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event queries.Event, success bool) {
+func eventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event imsdb.Event, success bool) {
 	if ok := parseForm(w, req); !ok {
-		return queries.Event{}, false
+		return imsdb.Event{}, false
 	}
 	eventName := req.FormValue("event_id")
 	if eventName == "" {
 		slog.Error("No event_id was found in the URL path", "path", req.URL.Path)
 		http.Error(w, "No event_id was found in the URL", http.StatusBadRequest)
-		return queries.Event{}, false
+		return imsdb.Event{}, false
 	}
-	eventRow, err := queries.New(imsDB).QueryEventID(req.Context(), eventName)
+	eventRow, err := imsdb.New(imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		http.Error(w, "Failed to get event ID", http.StatusInternalServerError)
-		return queries.Event{}, false
+		return imsdb.Event{}, false
 	}
 	return eventRow.Event, true
 }
 
-func eventFromName(w http.ResponseWriter, req *http.Request, eventName string, imsDB *sql.DB) (event queries.Event, success bool) {
+func eventFromName(w http.ResponseWriter, req *http.Request, eventName string, imsDB *sql.DB) (event imsdb.Event, success bool) {
 	if eventName == "" {
 		slog.Error("No eventName was provided")
 		http.Error(w, "No eventName was provided", http.StatusInternalServerError)
-		return queries.Event{}, false
+		return imsdb.Event{}, false
 	}
-	eventRow, err := queries.New(imsDB).QueryEventID(req.Context(), eventName)
+	eventRow, err := imsdb.New(imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		http.Error(w, "Failed to get event ID", http.StatusInternalServerError)
-		return queries.Event{}, false
+		return imsdb.Event{}, false
 	}
 	return eventRow.Event, true
 }

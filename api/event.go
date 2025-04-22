@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
 )
@@ -17,7 +17,7 @@ type GetEvents struct {
 func (hand GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 
-	eventRows, err := queries.New(hand.imsDB).Events(req.Context())
+	eventRows, err := imsdb.New(hand.imsDB).Events(req.Context())
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)

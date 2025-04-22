@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log"
 	"log/slog"
 	"net/http"
@@ -25,8 +25,8 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 	if !ok {
 		return
 	}
-	reportEntries, err := queries.New(handler.imsDB).FieldReports_ReportEntries(req.Context(),
-		queries.FieldReports_ReportEntriesParams{
+	reportEntries, err := imsdb.New(handler.imsDB).FieldReports_ReportEntries(req.Context(),
+		imsdb.FieldReports_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
 		})
@@ -50,7 +50,7 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 		})
 	}
 
-	rows, err := queries.New(handler.imsDB).FieldReports(req.Context(), event.ID)
+	rows, err := imsdb.New(handler.imsDB).FieldReports(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -90,8 +90,8 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	reportEntryRows, err := queries.New(handler.imsDB).FieldReport_ReportEntries(req.Context(),
-		queries.FieldReport_ReportEntriesParams{
+	reportEntryRows, err := imsdb.New(handler.imsDB).FieldReport_ReportEntries(req.Context(),
+		imsdb.FieldReport_ReportEntriesParams{
 			Event:             event.ID,
 			FieldReportNumber: int32(fieldReportNumber),
 		})
@@ -101,7 +101,7 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	frRow, err := queries.New(handler.imsDB).FieldReport(req.Context(), queries.FieldReportParams{
+	frRow, err := imsdb.New(handler.imsDB).FieldReport(req.Context(), imsdb.FieldReportParams{
 		Event:  event.ID,
 		Number: int32(fieldReportNumber),
 	})

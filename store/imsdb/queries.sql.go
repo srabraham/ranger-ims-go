@@ -3,7 +3,7 @@
 //   sqlc v1.29.0
 // source: queries.sql
 
-package queries
+package imsdb
 
 import (
 	"context"

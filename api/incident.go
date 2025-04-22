@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log"
 	"log/slog"
 	"net/http"
@@ -36,8 +36,8 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 	//	return
 	//}
 
-	reportEntries, err := queries.New(hand.imsDB).Incidents_ReportEntries(req.Context(),
-		queries.Incidents_ReportEntriesParams{
+	reportEntries, err := imsdb.New(hand.imsDB).Incidents_ReportEntries(req.Context(),
+		imsdb.Incidents_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
 		})
@@ -61,7 +61,7 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
-	rows, err := queries.New(hand.imsDB).Incidents(req.Context(), event.ID)
+	rows, err := imsdb.New(hand.imsDB).Incidents(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -115,7 +115,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 	eventName := req.PathValue("eventName")
 	incident := req.PathValue("incidentNumber")
 
-	eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+	eventRow, err := imsdb.New(hand.imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get eventRow ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -129,7 +129,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r, err := queries.New(hand.imsDB).Incident(req.Context(), queries.IncidentParams{
+	r, err := imsdb.New(hand.imsDB).Incident(req.Context(), imsdb.IncidentParams{
 		Event:  eventRow.Event.ID,
 		Number: int32(incidentNumber),
 	})
@@ -139,8 +139,8 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reportEntries, err := queries.New(hand.imsDB).Incident_ReportEntries(req.Context(),
-		queries.Incident_ReportEntriesParams{
+	reportEntries, err := imsdb.New(hand.imsDB).Incident_ReportEntries(req.Context(),
+		imsdb.Incident_ReportEntriesParams{
 			Event:          eventRow.Event.ID,
 			IncidentNumber: int32(incidentNumber),
 		},

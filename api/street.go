@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
 )
@@ -20,15 +20,15 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	eventName := req.Form.Get("event_id")
-	var events []queries.Event
+	var events []imsdb.Event
 	if eventName != "" {
 		event, ok := eventFromFormValue(w, req, hand.imsDB)
 		if !ok {
 			return
 		}
-		events = append(events, queries.Event{ID: event.ID, Name: event.Name})
+		events = append(events, imsdb.Event{ID: event.ID, Name: event.Name})
 	} else {
-		eventRows, err := queries.New(hand.imsDB).Events(req.Context())
+		eventRows, err := imsdb.New(hand.imsDB).Events(req.Context())
 		if err != nil {
 			slog.Error("Failed to get events", "error", err)
 			http.Error(w, "Failed to get events", http.StatusInternalServerError)
@@ -40,7 +40,7 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 	}
 
 	for _, event := range events {
-		streets, err := queries.New(hand.imsDB).ConcentricStreets(req.Context(), event.ID)
+		streets, err := imsdb.New(hand.imsDB).ConcentricStreets(req.Context(), event.ID)
 		if err != nil {
 			slog.Error("Failed to get streets", "error", err)
 			http.Error(w, "Failed to get streets", http.StatusInternalServerError)

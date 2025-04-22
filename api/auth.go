@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
-	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
+	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/clubhousedb"
 	"io"
 	"log/slog"
 	"net/http"

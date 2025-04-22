@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/srabraham/ranger-ims-go/store/queries"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"maps"
 	"slices"
 	"strings"
@@ -87,13 +87,13 @@ func UserPermissions2(
 	imsAdmins []string,
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
-	var eventAccesses []queries.EventAccess
+	var eventAccesses []imsdb.EventAccess
 	if eventName != "" {
-		eventRow, err := queries.New(imsDB).QueryEventID(ctx, eventName)
+		eventRow, err := imsdb.New(imsDB).QueryEventID(ctx, eventName)
 		if err != nil {
 			return nil, fmt.Errorf("QueryEventID: %w", err)
 		}
-		accessRows, err := queries.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
+		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
 		if err != nil {
 			return nil, fmt.Errorf("EventAccess: %w", err)
 		}
@@ -106,17 +106,17 @@ func UserPermissions2(
 }
 
 func UserPermissions(
-	eventAccesses []queries.EventAccess, // all for the same event, or nil for no event
+	eventAccesses []imsdb.EventAccess, // all for the same event, or nil for no event
 	imsAdmins []string,
 	handle string,
 	onsite bool,
 	positions, teams []string,
 ) map[Permission]bool {
 
-	translate := map[queries.EventAccessMode]Role{
-		queries.EventAccessModeRead:   EventReader,
-		queries.EventAccessModeWrite:  EventWriter,
-		queries.EventAccessModeReport: EventReporter,
+	translate := map[imsdb.EventAccessMode]Role{
+		imsdb.EventAccessModeRead:   EventReader,
+		imsdb.EventAccessModeWrite:  EventWriter,
+		imsdb.EventAccessModeReport: EventReporter,
 	}
 
 	perms := make(map[Permission]bool)
@@ -147,10 +147,10 @@ func UserPermissions(
 			matchExpr = true
 		}
 		matchValidity := false
-		if ea.Validity == queries.EventAccessValidityAlways {
+		if ea.Validity == imsdb.EventAccessValidityAlways {
 			matchValidity = true
 		}
-		if ea.Validity == queries.EventAccessValidityOnsite && onsite {
+		if ea.Validity == imsdb.EventAccessValidityOnsite && onsite {
 			matchValidity = true
 		}
 		if matchExpr && matchValidity {

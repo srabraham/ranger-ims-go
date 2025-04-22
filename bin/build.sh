@@ -5,10 +5,7 @@ set -e
 reporoot=$(git rev-parse --show-toplevel)
 
 echo "invoking sqlc generate"
-cd "${reporoot}/store"
-go tool sqlc generate
-cd "${reporoot}/directory"
-go tool sqlc generate
+cd "${reporoot}"
 echo "finished sqlc generate"
 
 echo "invoking templ generate"
