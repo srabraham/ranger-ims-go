@@ -20,7 +20,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
-			GetEventAccesses{imsDB: db}.handler,
+			GetEventAccesses{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -29,7 +29,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/access",
 		Adapt(
-			PostEventAccess{imsDB: db}.handler,
+			PostEventAccess{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -43,7 +43,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				clubhouseDB: clubhouseDB,
 				jwtSecret:   cfg.Core.JWTSecret,
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
-			}.postAuth,
+			},
 		),
 		// This endpoint does not require authentication, nor
 		// should it even consider current Authorization header.
@@ -56,7 +56,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				clubhouseDB: clubhouseDB,
 				jwtSecret:   cfg.Core.JWTSecret,
 				admins:      cfg.Core.Admins,
-			}.getAuth,
+			},
 			ExtractClaimsToContext(j),
 			// This endpoint does not require authentication or authorization, by design
 		),
@@ -64,7 +64,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents",
 		Adapt(
-			GetIncidents{imsDB: db}.getIncidents,
+			GetIncidents{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
@@ -73,7 +73,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
-			GetIncident{imsDB: db}.getIncident,
+			GetIncident{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
@@ -82,7 +82,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
-			GetFieldReports{imsDB: db}.getFieldReports,
+			GetFieldReports{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
@@ -91,7 +91,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
-			GetFieldReport{imsDB: db}.getFieldReport,
+			GetFieldReport{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
@@ -100,7 +100,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/events",
 		Adapt(
-			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins}.handler,
+			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			// ugh, no eventname in path
@@ -110,7 +110,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/events",
 		Adapt(
-			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins}.handler,
+			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -119,7 +119,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/streets",
 		Adapt(
-			GetStreets{imsDB: db}.getStreets,
+			GetStreets{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			// ugh, no eventname in path
@@ -129,7 +129,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
-			GetIncidentTypes{imsDB: db}.getIncidentTypes,
+			GetIncidentTypes{imsDB: db},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidentTypes, db, cfg.Core.Admins),
@@ -138,7 +138,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
-			GetPersonnel{clubhouseDB: clubhouseDB}.getPersonnel,
+			GetPersonnel{clubhouseDB: clubhouseDB},
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadPersonnel, db, cfg.Core.Admins),
@@ -267,8 +267,16 @@ func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []s
 	}
 }
 
-func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
-	handler := http.Handler(h)
+//func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
+//	handler := http.Handler(h)
+//	for i := range adapters {
+//		adapter := adapters[len(adapters)-1-i] // range in reverse
+//		handler = adapter(handler)
+//	}
+//	return handler
+//}
+
+func Adapt(handler http.Handler, adapters ...Adapter) http.Handler {
 	for i := range adapters {
 		adapter := adapters[len(adapters)-1-i] // range in reverse
 		handler = adapter(handler)

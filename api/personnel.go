@@ -14,12 +14,12 @@ type GetPersonnel struct {
 
 type GetPersonnelResponse []imsjson.Person
 
-func (hand GetPersonnel) getPersonnel(w http.ResponseWriter, req *http.Request) {
+func (action GetPersonnel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	response := make(GetPersonnelResponse, 0)
 
 	// TODO: cache the personnel
 
-	results, err := clubhousequeries.New(hand.clubhouseDB).RangersById(req.Context())
+	results, err := clubhousequeries.New(action.clubhouseDB).RangersById(req.Context())
 	if err != nil {
 		slog.Error("Error getting Rangers", "error", err)
 		http.Error(w, "Failed to get Rangers", http.StatusInternalServerError)

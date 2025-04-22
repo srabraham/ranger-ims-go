@@ -29,8 +29,8 @@ type PostAuthResponse struct {
 	Token string `json:"token"`
 }
 
-func (hand PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
-	results, err := clubhousequeries.New(hand.clubhouseDB).RangersById(req.Context())
+func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	results, err := clubhousequeries.New(action.clubhouseDB).RangersById(req.Context())
 	if err != nil {
 		slog.Error("Failed to fetch Rangers", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -72,10 +72,10 @@ func (hand PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// TODO: cache all this
-	teams, _ := clubhousequeries.New(hand.clubhouseDB).Teams(req.Context())
-	positions, _ := clubhousequeries.New(hand.clubhouseDB).Positions(req.Context())
-	personTeams, _ := clubhousequeries.New(hand.clubhouseDB).PersonTeams(req.Context())
-	personPositions, _ := clubhousequeries.New(hand.clubhouseDB).PersonPositions(req.Context())
+	teams, _ := clubhousequeries.New(action.clubhouseDB).Teams(req.Context())
+	positions, _ := clubhousequeries.New(action.clubhouseDB).Positions(req.Context())
+	personTeams, _ := clubhousequeries.New(action.clubhouseDB).PersonTeams(req.Context())
+	personPositions, _ := clubhousequeries.New(action.clubhouseDB).PersonPositions(req.Context())
 
 	var foundPositions []uint64
 	var foundPositionNames []string
@@ -103,7 +103,7 @@ func (hand PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
-		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, hand.jwtDuration)
+		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, action.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 
 	writeJSON(w, resp)
@@ -130,7 +130,7 @@ type AccessForEvent struct {
 	AttachFiles       bool `json:"attachFiles"`
 }
 
-func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
+func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := GetAuthResponse{}
 
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
@@ -143,7 +143,7 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	claims := jwtCtx.Claims
 	handle := claims.RangerHandle()
 	var roles []auth.Role
-	if slices.Contains(hand.admins, handle) {
+	if slices.Contains(action.admins, handle) {
 		roles = append(roles, auth.Administrator)
 	}
 	resp.Authenticated = true
@@ -158,7 +158,7 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
 
-		permissions, err := auth.UserPermissions2(req.Context(), eventName, hand.imsDB, hand.admins, *claims)
+		permissions, err := auth.UserPermissions2(req.Context(), eventName, action.imsDB, action.admins, *claims)
 		if err != nil {
 			slog.Error("Failed to compute permissions", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)

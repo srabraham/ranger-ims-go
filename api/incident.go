@@ -16,27 +16,27 @@ type GetIncidents struct {
 	imsDB *sql.DB
 }
 
-func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) {
+func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if !parseForm(w, req) {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), hand.imsDB)
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
 
 	//eventName := req.PathValue("eventName")
 	//
-	//eventRow, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+	//eventRow, err := queries.New(action.imsDB).QueryEventID(req.Context(), eventName)
 	//if err != nil {
 	//	slog.Error("Failed to get event ID", "error", err)
 	//	w.WriteHeader(http.StatusInternalServerError)
 	//	return
 	//}
 
-	reportEntries, err := imsdb.New(hand.imsDB).Incidents_ReportEntries(req.Context(),
+	reportEntries, err := imsdb.New(action.imsDB).Incidents_ReportEntries(req.Context(),
 		imsdb.Incidents_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
@@ -61,7 +61,7 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
-	rows, err := imsdb.New(hand.imsDB).Incidents(req.Context(), event.ID)
+	rows, err := imsdb.New(action.imsDB).Incidents(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -110,12 +110,12 @@ type GetIncident struct {
 	imsDB *sql.DB
 }
 
-func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
+func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	eventName := req.PathValue("eventName")
 	incident := req.PathValue("incidentNumber")
 
-	eventRow, err := imsdb.New(hand.imsDB).QueryEventID(req.Context(), eventName)
+	eventRow, err := imsdb.New(action.imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get eventRow ID", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -129,7 +129,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r, err := imsdb.New(hand.imsDB).Incident(req.Context(), imsdb.IncidentParams{
+	r, err := imsdb.New(action.imsDB).Incident(req.Context(), imsdb.IncidentParams{
 		Event:  eventRow.Event.ID,
 		Number: int32(incidentNumber),
 	})
@@ -139,7 +139,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reportEntries, err := imsdb.New(hand.imsDB).Incident_ReportEntries(req.Context(),
+	reportEntries, err := imsdb.New(action.imsDB).Incident_ReportEntries(req.Context(),
 		imsdb.Incident_ReportEntriesParams{
 			Event:          eventRow.Event.ID,
 			IncidentNumber: int32(incidentNumber),

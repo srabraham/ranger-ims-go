@@ -13,14 +13,14 @@ type GetIncidentTypes struct {
 	imsDB *sql.DB
 }
 
-func (hand GetIncidentTypes) getIncidentTypes(w http.ResponseWriter, req *http.Request) {
+func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	response := make(imsjson.IncidentTypes, 0)
 
 	if success := parseForm(w, req); !success {
 		return
 	}
 	includeHidden := req.Form.Get("hidden") == "true"
-	typeRows, err := imsdb.New(hand.imsDB).IncidentTypes(req.Context())
+	typeRows, err := imsdb.New(action.imsDB).IncidentTypes(req.Context())
 	if err != nil {
 		slog.Error("IncidentTypes query", "error", err)
 		http.Error(w, "IncidentTypes query failed", http.StatusInternalServerError)

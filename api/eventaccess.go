@@ -10,13 +10,14 @@ import (
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
+	"sync"
 )
 
 type GetEventAccesses struct {
 	imsDB *sql.DB
 }
 
-func (action GetEventAccesses) handler(w http.ResponseWriter, req *http.Request) {
+func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := imsjson.EventsAccess{}
 	ctx := req.Context()
 
@@ -80,7 +81,12 @@ type PostEventAccess struct {
 	imsDB *sql.DB
 }
 
-func (action PostEventAccess) handler(w http.ResponseWriter, req *http.Request) {
+var eventAccessWriteMu sync.Mutex
+
+func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	eventAccessWriteMu.Lock()
+	defer eventAccessWriteMu.Unlock()
+
 	ctx := req.Context()
 	if ok := parseForm(w, req); !ok {
 		return

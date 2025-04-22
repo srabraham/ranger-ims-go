@@ -16,7 +16,7 @@ type GetEvents struct {
 	imsAdmins []string
 }
 
-func (action GetEvents) handler(w http.ResponseWriter, req *http.Request) {
+func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 	ctx := req.Context()
 
@@ -65,7 +65,7 @@ type EditEvents struct {
 // and in filesystem directory paths.
 var allowedEventNames = regexp.MustCompile(`^[\w-]+$`)
 
-func (action EditEvents) handler(w http.ResponseWriter, req *http.Request) {
+func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	if ok := parseForm(w, req); !ok {
 		return

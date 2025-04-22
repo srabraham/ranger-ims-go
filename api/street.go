@@ -12,7 +12,7 @@ type GetStreets struct {
 	imsDB *sql.DB
 }
 
-func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
+func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// eventName --> street ID --> street name
 	resp := make(imsjson.EventsStreets)
 
@@ -22,13 +22,13 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 	eventName := req.Form.Get("event_id")
 	var events []imsdb.Event
 	if eventName != "" {
-		event, ok := eventFromFormValue(w, req, hand.imsDB)
+		event, ok := eventFromFormValue(w, req, action.imsDB)
 		if !ok {
 			return
 		}
 		events = append(events, imsdb.Event{ID: event.ID, Name: event.Name})
 	} else {
-		eventRows, err := imsdb.New(hand.imsDB).Events(req.Context())
+		eventRows, err := imsdb.New(action.imsDB).Events(req.Context())
 		if err != nil {
 			slog.Error("Failed to get events", "error", err)
 			http.Error(w, "Failed to get events", http.StatusInternalServerError)
@@ -40,7 +40,7 @@ func (hand GetStreets) getStreets(w http.ResponseWriter, req *http.Request) {
 	}
 
 	for _, event := range events {
-		streets, err := imsdb.New(hand.imsDB).ConcentricStreets(req.Context(), event.ID)
+		streets, err := imsdb.New(action.imsDB).ConcentricStreets(req.Context(), event.ID)
 		if err != nil {
 			slog.Error("Failed to get streets", "error", err)
 			http.Error(w, "Failed to get streets", http.StatusInternalServerError)

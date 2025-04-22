@@ -15,7 +15,7 @@ type GetFieldReports struct {
 	imsDB *sql.DB
 }
 
-func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Request) {
+func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.FieldReports, 0)
 	ctx := req.Context()
 
@@ -24,11 +24,11 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), handler.imsDB)
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
-	reportEntries, err := imsdb.New(handler.imsDB).FieldReports_ReportEntries(ctx,
+	reportEntries, err := imsdb.New(action.imsDB).FieldReports_ReportEntries(ctx,
 		imsdb.FieldReports_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
@@ -53,7 +53,7 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 		})
 	}
 
-	rows, err := imsdb.New(handler.imsDB).FieldReports(ctx, event.ID)
+	rows, err := imsdb.New(action.imsDB).FieldReports(ctx, event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -77,11 +77,11 @@ type GetFieldReport struct {
 	imsDB *sql.DB
 }
 
-func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Request) {
+func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	response := imsjson.FieldReport{}
 	ctx := req.Context()
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), handler.imsDB)
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -92,7 +92,7 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	reportEntryRows, err := imsdb.New(handler.imsDB).FieldReport_ReportEntries(ctx,
+	reportEntryRows, err := imsdb.New(action.imsDB).FieldReport_ReportEntries(ctx,
 		imsdb.FieldReport_ReportEntriesParams{
 			Event:             event.ID,
 			FieldReportNumber: int32(fieldReportNumber),
@@ -103,7 +103,7 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	frRow, err := imsdb.New(handler.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
+	frRow, err := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
 		Event:  event.ID,
 		Number: int32(fieldReportNumber),
 	})
