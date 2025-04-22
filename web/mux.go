@@ -1,87 +1,54 @@
 package web
 
 import (
+	"fmt"
+	"github.com/a-h/templ"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/web/template"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig) *http.ServeMux {
 	mux.Handle("GET /ims/static/",
 		Adapt(
 			http.StripPrefix("/ims/", http.FileServerFS(StaticFS)).ServeHTTP,
+			// Static isn't quite ready yet. We don't want to return the caching
+			// Cache-Control header on 400/500 responses.
+			//Static(1*time.Hour),
 		),
 	)
 	mux.Handle("GET /ims/app",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.Root(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.Root(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/admin",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.AdminRoot(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.AdminRoot(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/admin/events",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.AdminEvents(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.AdminEvents(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/admin/streets",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.AdminStreets(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.AdminStreets(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/admin/types",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.AdminTypes(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.AdminTypes(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/events/{eventName}/field_reports",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.FieldReports(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.FieldReports(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/events/{eventName}/field_reports/{fieldReportNumber}",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.FieldReport(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.FieldReport(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/events/{eventName}/incidents",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.Incidents(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.Incidents(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/app/events/{eventName}/incidents/{incidentNumber}",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.Incident(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.Incident(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/auth/login",
-		Adapt(
-			func(w http.ResponseWriter, req *http.Request) {
-				template.Login(cfg.Core.Deployment).Render(req.Context(), w)
-			},
-		),
+		AdaptTempl(template.Login(cfg.Core.Deployment)),
 	)
 	mux.Handle("GET /ims/auth/logout",
 		Adapt(
@@ -104,6 +71,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig) *http.ServeMux {
 	return mux
 }
 
+func Static(dur time.Duration) Adapter {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			durSec := int64(dur.Seconds())
+			w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%v, private", durSec))
+			next.ServeHTTP(w, r.WithContext(r.Context()))
+		})
+	}
+}
+
 type Adapter func(http.Handler) http.Handler
 
 func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
@@ -113,4 +90,18 @@ func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
 		handler = adapter(h)
 	}
 	return handler
+}
+
+func AdaptTempl(comp templ.Component, adapters ...Adapter) http.Handler {
+	return Adapt(
+		func(w http.ResponseWriter, req *http.Request) {
+			err := comp.Render(req.Context(), w)
+			if err != nil {
+				slog.Error("Failed to render template", "error", err)
+				http.Error(w, "Failed to parse template", http.StatusInternalServerError)
+				return
+			}
+		},
+		adapters...,
+	)
 }

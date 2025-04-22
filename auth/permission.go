@@ -13,42 +13,61 @@ import (
 type Role string
 
 const (
-	EventReporter Role = "EventReporter"
-	EventReader   Role = "EventReader"
-	EventWriter   Role = "EventWriter"
-	Administrator Role = "Administrator"
+	AnyAuthenticatedUser Role = "AnyAuthenticatedUser"
+	EventReporter        Role = "EventReporter"
+	EventReader          Role = "EventReader"
+	EventWriter          Role = "EventWriter"
+	Administrator        Role = "Administrator"
 )
 
 type Permission string
 
 const (
-	ReadEventName        Permission = "ReadEventName"
+	// Event-specific permissions
+
 	ReadIncidents        Permission = "ReadIncidents"
 	WriteIncidents       Permission = "WriteIncidents"
 	ReadAllFieldReports  Permission = "ReadAllFieldReports"
 	WriteAllFieldReports Permission = "WriteAllFieldReports"
 	WriteOwnFieldReports Permission = "WriteOwnFieldReports"
 	ReadOwnFieldReports  Permission = "ReadOwnFieldReports"
-	ReadPersonnel        Permission = "ReadPersonnel"
-	AdminIMS             Permission = "AdminIMS"
+	ReadEventName        Permission = "ReadEventName"
+	ReadEventStreets     Permission = "ReadEventStreets"
+
+	// Permissions that aren't event-specific
+
+	ReadIncidentTypes Permission = "ReadIncidentTypes"
+	ReadPersonnel     Permission = "ReadPersonnel"
+	AdminIMS          Permission = "AdminIMS"
 )
 
 var RolesToPerms = map[Role]map[Permission]bool{
+	AnyAuthenticatedUser: {
+		ReadIncidentTypes: true,
+		ReadIncidents:     true,
+		ReadPersonnel:     true,
+	},
 	EventReporter: {
 		ReadEventName:        true,
+		ReadIncidentTypes:    true,
+		ReadEventStreets:     true,
 		WriteOwnFieldReports: true,
 		ReadOwnFieldReports:  true,
 	},
 	EventReader: {
 		ReadEventName:       true,
+		ReadEventStreets:    true,
 		ReadIncidents:       true,
+		ReadIncidentTypes:   true,
 		ReadAllFieldReports: true,
 		ReadOwnFieldReports: true,
 		ReadPersonnel:       true,
 	},
 	EventWriter: {
 		ReadEventName:        true,
+		ReadEventStreets:     true,
 		ReadIncidents:        true,
+		ReadIncidentTypes:    true,
 		WriteIncidents:       true,
 		ReadAllFieldReports:  true,
 		WriteAllFieldReports: true,
@@ -68,19 +87,20 @@ func UserPermissions2(
 	imsAdmins []string,
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
-	eventRow, err := queries.New(imsDB).QueryEventID(ctx, eventName)
-	if err != nil {
-		return nil, fmt.Errorf("QueryEventID: %w", err)
-	}
-	accessRows, err := queries.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
-	if err != nil {
-		return nil, fmt.Errorf("EventAccess: %w", err)
-	}
 	var eventAccesses []queries.EventAccess
-	for _, ea := range accessRows {
-		eventAccesses = append(eventAccesses, ea.EventAccess)
+	if eventName != "" {
+		eventRow, err := queries.New(imsDB).QueryEventID(ctx, eventName)
+		if err != nil {
+			return nil, fmt.Errorf("QueryEventID: %w", err)
+		}
+		accessRows, err := queries.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
+		if err != nil {
+			return nil, fmt.Errorf("EventAccess: %w", err)
+		}
+		for _, ea := range accessRows {
+			eventAccesses = append(eventAccesses, ea.EventAccess)
+		}
 	}
-
 	permissions := UserPermissions(eventAccesses, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 	return permissions, nil
 }
@@ -100,6 +120,10 @@ func UserPermissions(
 	}
 
 	perms := make(map[Permission]bool)
+
+	if handle != "" {
+		maps.Copy(perms, RolesToPerms[AnyAuthenticatedUser])
+	}
 
 	if slices.Contains(imsAdmins, handle) {
 		maps.Copy(perms, RolesToPerms[Administrator])

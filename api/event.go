@@ -2,11 +2,9 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/queries"
-	"log"
 	"log/slog"
 	"net/http"
 )
@@ -16,9 +14,9 @@ type GetEvents struct {
 	imsAdmins []string
 }
 
-type GetEventsResponse []imsjson.Event
-
 func (hand GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
+	resp := make(imsjson.Events, 0)
+
 	eventRows, err := queries.New(hand.imsDB).Events(req.Context())
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
@@ -27,8 +25,6 @@ func (hand GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// TODO: need to apply authorization per event
-
-	resp := make(GetEventsResponse, 0)
 
 	claims := req.Context().Value(JWTContextKey).(JWTContext).Claims
 
@@ -54,8 +50,5 @@ func (hand GetEvents) getEvents(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	jjj, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jjj)
-	log.Println("returned events")
+	writeJSON(w, resp)
 }

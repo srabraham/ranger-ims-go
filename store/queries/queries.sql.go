@@ -10,6 +10,61 @@ import (
 	"database/sql"
 )
 
+const addEventAccess = `-- name: AddEventAccess :execlastid
+insert into EVENT_ACCESS (EVENT, EXPRESSION, MODE, VALIDITY)
+values (?, ?, ?, ?)
+`
+
+type AddEventAccessParams struct {
+	Event      int32
+	Expression string
+	Mode       EventAccessMode
+	Validity   EventAccessValidity
+}
+
+func (q *Queries) AddEventAccess(ctx context.Context, arg AddEventAccessParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, addEventAccess,
+		arg.Event,
+		arg.Expression,
+		arg.Mode,
+		arg.Validity,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+const clearEventAccessForExpression = `-- name: ClearEventAccessForExpression :exec
+delete from EVENT_ACCESS
+where EVENT = ? and EXPRESSION = ?
+`
+
+type ClearEventAccessForExpressionParams struct {
+	Event      int32
+	Expression string
+}
+
+func (q *Queries) ClearEventAccessForExpression(ctx context.Context, arg ClearEventAccessForExpressionParams) error {
+	_, err := q.db.ExecContext(ctx, clearEventAccessForExpression, arg.Event, arg.Expression)
+	return err
+}
+
+const clearEventAccessForMode = `-- name: ClearEventAccessForMode :exec
+delete from EVENT_ACCESS
+where EVENT = ? and MODE = ?
+`
+
+type ClearEventAccessForModeParams struct {
+	Event int32
+	Mode  EventAccessMode
+}
+
+func (q *Queries) ClearEventAccessForMode(ctx context.Context, arg ClearEventAccessForModeParams) error {
+	_, err := q.db.ExecContext(ctx, clearEventAccessForMode, arg.Event, arg.Mode)
+	return err
+}
+
 const concentricStreets = `-- name: ConcentricStreets :many
 select concentric_street.event, concentric_street.id, concentric_street.name
 from CONCENTRIC_STREET
@@ -165,6 +220,89 @@ func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
 	for rows.Next() {
 		var i EventsRow
 		if err := rows.Scan(&i.Event.ID, &i.Event.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fieldReport = `-- name: FieldReport :one
+select field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
+from FIELD_REPORT
+where EVENT = ?
+    and NUMBER = ?
+`
+
+type FieldReportParams struct {
+	Event  int32
+	Number int32
+}
+
+type FieldReportRow struct {
+	FieldReport FieldReport
+}
+
+func (q *Queries) FieldReport(ctx context.Context, arg FieldReportParams) (FieldReportRow, error) {
+	row := q.db.QueryRowContext(ctx, fieldReport, arg.Event, arg.Number)
+	var i FieldReportRow
+	err := row.Scan(
+		&i.FieldReport.Event,
+		&i.FieldReport.Number,
+		&i.FieldReport.Created,
+		&i.FieldReport.Summary,
+		&i.FieldReport.IncidentNumber,
+	)
+	return i, err
+}
+
+const fieldReport_ReportEntries = `-- name: FieldReport_ReportEntries :many
+select
+    re.id, re.author, re.text, re.created, re.` + "`" + `generated` + "`" + `, re.stricken, re.attached_file
+from
+    FIELD_REPORT__REPORT_ENTRY irre
+        join REPORT_ENTRY re
+             on irre.REPORT_ENTRY = re.ID
+where
+    irre.EVENT = ?
+    and irre.FIELD_REPORT_NUMBER = ?
+    and re.GENERATED <= ?
+`
+
+type FieldReport_ReportEntriesParams struct {
+	Event             int32
+	FieldReportNumber int32
+	Generated         bool
+}
+
+type FieldReport_ReportEntriesRow struct {
+	ReportEntry ReportEntry
+}
+
+func (q *Queries) FieldReport_ReportEntries(ctx context.Context, arg FieldReport_ReportEntriesParams) ([]FieldReport_ReportEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, fieldReport_ReportEntries, arg.Event, arg.FieldReportNumber, arg.Generated)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FieldReport_ReportEntriesRow
+	for rows.Next() {
+		var i FieldReport_ReportEntriesRow
+		if err := rows.Scan(
+			&i.ReportEntry.ID,
+			&i.ReportEntry.Author,
+			&i.ReportEntry.Text,
+			&i.ReportEntry.Created,
+			&i.ReportEntry.Generated,
+			&i.ReportEntry.Stricken,
+			&i.ReportEntry.AttachedFile,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

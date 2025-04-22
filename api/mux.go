@@ -19,6 +19,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetEventAccesses{imsDB: db}.getEventAccesses,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			RequireAuthorization(auth.AdminIMS, db, cfg.Core.Admins),
+		),
+	)
+
+	mux.Handle("POST /ims/api/access",
+		Adapt(
+			PostEventAccess{imsDB: db}.postEventAccess,
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.AdminIMS, db, cfg.Core.Admins),
 		),
 	)
 
@@ -44,7 +54,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				admins:      cfg.Core.Admins,
 			}.getAuth,
 			ExtractClaimsToContext(j),
-			// This endpoint does not require authentication
+			// This endpoint does not require authentication or authorization, by design
 		),
 	)
 
@@ -62,6 +72,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetIncident{imsDB: db}.getIncident,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -70,7 +81,15 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetFieldReports{imsDB: db}.getFieldReports,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			// TODO: need a READ permission
+			RequireAuthorization(auth.ReadOwnFieldReports, db, cfg.Core.Admins),
+		),
+	)
+
+	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
+		Adapt(
+			GetFieldReport{imsDB: db}.getFieldReport,
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadOwnFieldReports, db, cfg.Core.Admins),
 		),
 	)
@@ -80,6 +99,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins}.getEvents,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			//RequireAuthorization(auth.AnyAuthenticatedUser, db, cfg.Core.Admins),
 		),
 	)
 
@@ -88,6 +108,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetStreets{imsDB: db}.getStreets,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			//RequireAuthorization(auth.ReadEventStreets, db, cfg.Core.Admins),
 		),
 	)
 
@@ -96,6 +117,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetIncidentTypes{imsDB: db}.getIncidentTypes,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			RequireAuthorization(auth.ReadIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
 
@@ -104,14 +126,13 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			GetPersonnel{clubhouseDB: clubhouseDB}.getPersonnel,
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
+			RequireAuthorization(auth.ReadPersonnel, db, cfg.Core.Admins),
 		),
 	)
 
 	mux.HandleFunc("GET /ims/api/ping",
 		func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ack"))
+			http.Error(w, "ack", http.StatusOK)
 		},
 	)
 
@@ -172,27 +193,12 @@ func ExtractClaimsToContext(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
-			//if header == "" {
-			//	w.WriteHeader(http.StatusUnauthorized)
-			//	w.Write([]byte("No Authorization token was provided"))
-			//	return
-			//}
 			claims, err := j.AuthenticateJWT(header)
-
 			ctx := context.WithValue(r.Context(), JWTContextKey, JWTContext{
 				Claims: claims,
 				Error:  err,
 			})
-
 			next.ServeHTTP(w, r.WithContext(ctx))
-
-			//r.WithContext(context.WithValue(r.Context())).Value()
-			//if err != nil {
-			//	w.WriteHeader(http.StatusUnauthorized)
-			//	w.Write([]byte("Invalid Authorization token"))
-			//	return
-			//}
-			//next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -203,20 +209,18 @@ func RequireAuthenticated() Adapter {
 			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
 			if !found {
 				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
-				w.WriteHeader(http.StatusInternalServerError)
+				http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
+					http.StatusInternalServerError)
 				return
 			}
 			if jwtCtx.Error != nil || jwtCtx.Claims == nil {
 				slog.Error("JWT error", "error", jwtCtx.Error)
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte("Invalid Authorization token"))
+				http.Error(w, "Invalid Authorization token", http.StatusUnauthorized)
 				return
 			}
-			slog.Info("in require auth", "claims", jwtCtx.Claims)
 			if jwtCtx.Claims.RangerHandle() == "" {
 				slog.Error("No Ranger handle in JWT")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte("Invalid Authorization token"))
+				http.Error(w, "Invalid Authorization token", http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -224,30 +228,17 @@ func RequireAuthenticated() Adapter {
 	}
 }
 
-//
-//func ParseForm() Adapter {
-//	return func(next http.Handler) http.Handler {
-//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//
-//		})
-//	}
-//}
-
 func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []string) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
 			if !found {
 				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
-				w.WriteHeader(http.StatusInternalServerError)
+				http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
+					http.StatusInternalServerError)
 				return
 			}
-			//if err := r.ParseForm(); err != nil {
-			//	slog.Error("error parsing form", "error", err)
-			//	w.WriteHeader(http.StatusBadRequest)
-			//	return
-			//}
-			//permissions, err := auth.UserPermissions2(r.Context(), r.FormValue("event_id"), imsDB, imsAdmins, *jwtCtx.Claims)
+			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
 			permissions, err := auth.UserPermissions2(r.Context(), r.PathValue("eventName"), imsDB, imsAdmins, *jwtCtx.Claims)
 			if err != nil {
 				slog.Error("Failed to compute permissions", "error", err)
@@ -255,9 +246,7 @@ func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []s
 				return
 			}
 
-			slog.Info("testing authorization", "permissions", permissions, "required", required)
 			if !permissions[required] {
-				slog.Info("rejected!")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}

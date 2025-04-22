@@ -105,9 +105,8 @@ func (hand PostAuth) postAuth(w http.ResponseWriter, req *http.Request) {
 	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
 		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, hand.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
-	marsh, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(marsh)
+
+	writeJSON(w, resp)
 }
 
 type GetAuth struct {
@@ -132,13 +131,13 @@ type AccessForEvent struct {
 }
 
 func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
+	resp := GetAuthResponse{}
+
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
 	if !found || jwtCtx.Error != nil || jwtCtx.Claims == nil {
 		slog.Error("login failed", "error", jwtCtx.Error)
-		resp := GetAuthResponse{Authenticated: false}
-		marsh, _ := json.Marshal(resp)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(marsh)
+		resp.Authenticated = false
+		writeJSON(w, resp)
 		return
 	}
 	claims := jwtCtx.Claims
@@ -147,11 +146,9 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 	if slices.Contains(hand.admins, handle) {
 		roles = append(roles, auth.Administrator)
 	}
-	resp := GetAuthResponse{
-		Authenticated: true,
-		User:          handle,
-		Admin:         slices.Contains(roles, auth.Administrator),
-	}
+	resp.Authenticated = true
+	resp.User = handle
+	resp.Admin = slices.Contains(roles, auth.Administrator)
 
 	if err := req.ParseForm(); err != nil {
 		slog.Error("parseForm error", "error", err)
@@ -168,20 +165,6 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		//eventID, err := queries.New(hand.imsDB).QueryEventID(req.Context(), eventName)
-		//if err != nil {
-		//	slog.Error("Failed to get event ID", "error", err)
-		//	w.WriteHeader(http.StatusInternalServerError)
-		//	return
-		//}
-		//ea, err := queries.New(hand.imsDB).EventAccess(req.Context(), eventID)
-		//if err != nil {
-		//	slog.Error("EventAccess", "error", err)
-		//	w.WriteHeader(http.StatusInternalServerError)
-		//	return
-		//}
-		//permissions := auth.UserPermissions(ea, hand.admins, handle, claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
-
 		resp.EventAccess = map[string]AccessForEvent{
 			eventName: {
 				ReadIncidents:     permissions[auth.ReadIncidents],
@@ -192,7 +175,5 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	marsh, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(marsh)
+	writeJSON(w, resp)
 }

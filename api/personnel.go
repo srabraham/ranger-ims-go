@@ -2,7 +2,6 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/queries"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"log/slog"
@@ -16,17 +15,17 @@ type GetPersonnel struct {
 type GetPersonnelResponse []imsjson.Person
 
 func (hand GetPersonnel) getPersonnel(w http.ResponseWriter, req *http.Request) {
+	response := make(GetPersonnelResponse, 0)
 
 	// TODO: cache the personnel
 
 	results, err := clubhousequeries.New(hand.clubhouseDB).RangersById(req.Context())
 	if err != nil {
-		slog.ErrorContext(req.Context(), "Error getting rangers", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		slog.Error("Error getting Rangers", "error", err)
+		http.Error(w, "Failed to get Rangers", http.StatusInternalServerError)
 		return
 	}
 
-	response := make(GetPersonnelResponse, 0)
 	for _, r := range results {
 		response = append(response, imsjson.Person{
 			Handle:      r.Callsign,
@@ -36,7 +35,5 @@ func (hand GetPersonnel) getPersonnel(w http.ResponseWriter, req *http.Request) 
 		})
 	}
 
-	jjj, _ := json.Marshal(response)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jjj)
+	writeJSON(w, response)
 }

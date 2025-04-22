@@ -2,6 +2,7 @@ package json
 
 import "time"
 
+type FieldReports []FieldReport
 type FieldReport struct {
 	Event         *string        `json:"event"`
 	Number        *int32         `json:"number"`

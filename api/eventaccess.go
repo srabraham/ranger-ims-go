@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/queries"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -16,18 +17,18 @@ type GetEventAccesses struct {
 }
 
 func (hand GetEventAccesses) getEventAccesses(w http.ResponseWriter, req *http.Request) {
+	resp := imsjson.EventsAccess{}
 
 	eventName := req.PathValue("eventName")
 
-	resp, err := GetEventsAccess(req.Context(), hand.imsDB, eventName)
+	var err error
+	resp, err = GetEventsAccess(req.Context(), hand.imsDB, eventName)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println(err)
+		slog.Error("GetEventsAccess failed", "error", err)
+		http.Error(w, "Failed to get events access", http.StatusInternalServerError)
 		return
 	}
-	jjj, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jjj)
+	writeJSON(w, resp)
 }
 
 func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
@@ -75,4 +76,80 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 		resp[e.Name] = ea
 	}
 	return resp, nil
+}
+
+type PostEventAccess struct {
+	imsDB *sql.DB
+}
+
+func (handler PostEventAccess) postEventAccess(w http.ResponseWriter, req *http.Request) {
+	if ok := parseForm(w, req); !ok {
+		return
+	}
+	bodyBytes, ok := readBody(w, req)
+	if !ok {
+		return
+	}
+	var eventsAccess imsjson.EventsAccess
+	if err := json.Unmarshal(bodyBytes, &eventsAccess); err != nil {
+		slog.Error("PostEventAccess failed to parse body", "error", err)
+		http.Error(w, "Failed to parse body", http.StatusBadRequest)
+		return
+	}
+	var errs []error
+	for eventName, access := range eventsAccess {
+		event, success := eventFromName(w, req, eventName, handler.imsDB)
+		if !success {
+			return
+		}
+		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Readers, queries.EventAccessModeRead))
+		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Writers, queries.EventAccessModeWrite))
+		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Reporters, queries.EventAccessModeReport))
+	}
+	if err := errors.Join(errs...); err != nil {
+		slog.Error("PostEventAccess", "error", err)
+		http.Error(w, "Failed to set event access", http.StatusInternalServerError)
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+}
+
+func (handler PostEventAccess) maybeSetAccess(ctx context.Context, event queries.Event, rules []imsjson.AccessRule, mode queries.EventAccessMode) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	txn, err := handler.imsDB.BeginTx(ctx, nil)
+	defer txn.Rollback()
+	if err != nil {
+		return fmt.Errorf("[BeginTx]: %w", err)
+	}
+	err = queries.New(handler.imsDB).WithTx(txn).ClearEventAccessForMode(ctx, queries.ClearEventAccessForModeParams{
+		Event: event.ID,
+		Mode:  mode,
+	})
+	if err != nil {
+		return fmt.Errorf("[ClearEventAccessForMode]: %w", err)
+	}
+	for _, rule := range rules {
+		err = queries.New(handler.imsDB).WithTx(txn).ClearEventAccessForExpression(ctx, queries.ClearEventAccessForExpressionParams{
+			Event:      event.ID,
+			Expression: rule.Expression,
+		})
+		if err != nil {
+			return fmt.Errorf("[ClearEventAccessForExpression]: %w", err)
+		}
+		_, err = queries.New(handler.imsDB).WithTx(txn).AddEventAccess(ctx, queries.AddEventAccessParams{
+			Event:      event.ID,
+			Expression: rule.Expression,
+			Mode:       mode,
+			Validity:   queries.EventAccessValidity(rule.Validity),
+		})
+		if err != nil {
+			return fmt.Errorf("[AddEventAccess]: %w", err)
+		}
+	}
+	if err = txn.Commit(); err != nil {
+		return fmt.Errorf("[Commit]: %w", err)
+	}
+	return nil
 }

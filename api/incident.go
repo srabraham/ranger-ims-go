@@ -22,8 +22,8 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, success := eventFromPathValue(w, req, hand.imsDB)
-	if !success {
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), hand.imsDB)
+	if !ok {
 		return
 	}
 
@@ -102,21 +102,13 @@ func (hand GetIncidents) getIncidents(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	//jjj, _ := json.MarshalIndent(resp, "", "  ")
 	jjj, _ := json.Marshal(resp)
 	w.Write(jjj)
-	//
-	//rows, _ := db.Query("select * from incident")
-	//for rows.Next() {
-	//	log.Println(rows.Scan())
-	//}
 }
 
 type GetIncident struct {
 	imsDB *sql.DB
 }
-
-type GetIncidentResponse imsjson.Incident
 
 func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 
@@ -183,7 +175,7 @@ func (hand GetIncident) getIncident(w http.ResponseWriter, req *http.Request) {
 	json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 
 	var garett = "garett"
-	result := GetIncidentResponse{
+	result := imsjson.Incident{
 		Event:   ptr(eventRow.Event.Name),
 		Number:  ptr(r.Incident.Number),
 		Created: ptr(time.Unix(int64(r.Incident.Created), 0)),

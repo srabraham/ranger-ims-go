@@ -15,6 +15,18 @@ select sqlc.embed(EVENT_ACCESS)
 from EVENT_ACCESS
 where EVENT = ?;
 
+-- name: ClearEventAccessForMode :exec
+delete from EVENT_ACCESS
+where EVENT = ? and MODE = ?;
+
+-- name: ClearEventAccessForExpression :exec
+delete from EVENT_ACCESS
+where EVENT = ? and EXPRESSION = ?;
+
+-- name: AddEventAccess :execlastid
+insert into EVENT_ACCESS (EVENT, EXPRESSION, MODE, VALIDITY)
+values (?, ?, ?, ?);
+
 -- name: CreateIncident :execlastid
 insert into INCIDENT (
     EVENT,
@@ -130,6 +142,12 @@ select sqlc.embed(FIELD_REPORT)
 from FIELD_REPORT
 where EVENT = ?;
 
+-- name: FieldReport :one
+select sqlc.embed(FIELD_REPORT)
+from FIELD_REPORT
+where EVENT = ?
+    and NUMBER = ?;
+
 -- name: FieldReports_ReportEntries :many
 select
     irre.FIELD_REPORT_NUMBER,
@@ -142,3 +160,18 @@ where
     irre.EVENT = ?
     and re.GENERATED <= ?
 ;
+
+-- name: FieldReport_ReportEntries :many
+select
+    sqlc.embed(re)
+from
+    FIELD_REPORT__REPORT_ENTRY irre
+        join REPORT_ENTRY re
+             on irre.REPORT_ENTRY = re.ID
+where
+    irre.EVENT = ?
+    and irre.FIELD_REPORT_NUMBER = ?
+    and re.GENERATED <= ?
+;
+
+

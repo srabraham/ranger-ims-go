@@ -53,6 +53,24 @@ func (ns NullEventAccessMode) Value() (driver.Value, error) {
 	return string(ns.EventAccessMode), nil
 }
 
+func (e EventAccessMode) Valid() bool {
+	switch e {
+	case EventAccessModeRead,
+		EventAccessModeWrite,
+		EventAccessModeReport:
+		return true
+	}
+	return false
+}
+
+func AllEventAccessModeValues() []EventAccessMode {
+	return []EventAccessMode{
+		EventAccessModeRead,
+		EventAccessModeWrite,
+		EventAccessModeReport,
+	}
+}
+
 type EventAccessValidity string
 
 const (
@@ -93,6 +111,22 @@ func (ns NullEventAccessValidity) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.EventAccessValidity), nil
+}
+
+func (e EventAccessValidity) Valid() bool {
+	switch e {
+	case EventAccessValidityAlways,
+		EventAccessValidityOnsite:
+		return true
+	}
+	return false
+}
+
+func AllEventAccessValidityValues() []EventAccessValidity {
+	return []EventAccessValidity{
+		EventAccessValidityAlways,
+		EventAccessValidityOnsite,
+	}
 }
 
 type IncidentState string
@@ -138,6 +172,28 @@ func (ns NullIncidentState) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.IncidentState), nil
+}
+
+func (e IncidentState) Valid() bool {
+	switch e {
+	case IncidentStateNew,
+		IncidentStateOnHold,
+		IncidentStateDispatched,
+		IncidentStateOnScene,
+		IncidentStateClosed:
+		return true
+	}
+	return false
+}
+
+func AllIncidentStateValues() []IncidentState {
+	return []IncidentState{
+		IncidentStateNew,
+		IncidentStateOnHold,
+		IncidentStateDispatched,
+		IncidentStateOnScene,
+		IncidentStateClosed,
+	}
 }
 
 type ConcentricStreet struct {
