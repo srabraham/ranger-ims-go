@@ -135,7 +135,6 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
 	if !found || jwtCtx.Error != nil || jwtCtx.Claims == nil {
-		slog.Error("login failed", "error", jwtCtx.Error)
 		resp.Authenticated = false
 		writeJSON(w, resp)
 		return
