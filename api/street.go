@@ -51,5 +51,6 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			resp[event.Name][street.ConcentricStreet.ID] = street.ConcentricStreet.Name
 		}
 	}
+	w.Header().Set("Cache-Control", "max-age=1200, private")
 	writeJSON(w, resp)
 }

@@ -1059,8 +1059,8 @@ async function detachFieldReport(sender: HTMLElement): Promise<void> {
     const frNumber = parent.getAttribute("fr-number")!;
 
     const url = (
-        ims.urlReplace(url_fieldReports) + frNumber +
-        "?action=detach;incident=" + ims.pathIds.incidentNumber
+        `${ims.urlReplace(url_fieldReports)}/${frNumber}` +
+        `?action=detach&incident=${ims.pathIds.incidentNumber}`
     );
     const {err} = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify({}),
@@ -1091,8 +1091,8 @@ async function attachFieldReport(): Promise<void> {
     const fieldReportNumber = select.value;
 
     const url = (
-        ims.urlReplace(url_fieldReports) + fieldReportNumber +
-        "?action=attach;incident=" + ims.pathIds.incidentNumber
+        `${ims.urlReplace(url_fieldReports)}/${fieldReportNumber}` +
+        `?action=attach&incident=${ims.pathIds.incidentNumber}`
     );
     const {err} = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify({}),

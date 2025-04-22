@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
-	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,6 +20,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
 			GetEventAccesses{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -30,6 +30,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("POST /ims/api/access",
 		Adapt(
 			PostEventAccess{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -44,6 +45,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				jwtSecret:   cfg.Core.JWTSecret,
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 			},
+			LogBeforeAfter(),
 		),
 		// This endpoint does not require authentication, nor
 		// should it even consider current Authorization header.
@@ -57,6 +59,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 				jwtSecret:   cfg.Core.JWTSecret,
 				admins:      cfg.Core.Admins,
 			},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			// This endpoint does not require authentication or authorization, by design
 		),
@@ -65,6 +68,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents",
 		Adapt(
 			GetIncidents{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
@@ -74,6 +78,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
 			GetIncident{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
@@ -83,6 +88,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
 			GetFieldReports{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
@@ -92,15 +98,27 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
 			GetFieldReport{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
+	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
+		Adapt(
+			EditFieldReport{imsDB: db},
+			LogBeforeAfter(),
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.WriteFieldReports, db, cfg.Core.Admins),
+		),
+	)
+
 	mux.Handle("GET /ims/api/events",
 		Adapt(
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			// ugh, no eventname in path
@@ -111,6 +129,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("POST /ims/api/events",
 		Adapt(
 			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
@@ -120,6 +139,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/streets",
 		Adapt(
 			GetStreets{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			// ugh, no eventname in path
@@ -130,6 +150,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
 			GetIncidentTypes{imsDB: db},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidentTypes, db, cfg.Core.Admins),
@@ -139,6 +160,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
 			GetPersonnel{clubhouseDB: clubhouseDB},
+			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadPersonnel, db, cfg.Core.Admins),
@@ -184,10 +206,9 @@ type Adapter func(http.Handler) http.Handler
 func LogBeforeAfter() Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Println("before")
-			defer log.Println("after, with defer")
+			start := time.Now()
 			next.ServeHTTP(w, r)
-			log.Println("called ServeHTTP")
+			slog.Info("done serving request", "duration", time.Since(start), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }

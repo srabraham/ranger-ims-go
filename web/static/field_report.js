@@ -304,7 +304,7 @@ async function makeIncident() {
     fieldReport.incident = ims.parseInt10(newNum);
     // Attach this FR to that new incident
     const attachToIncidentUrl = `${ims.urlReplace(url_fieldReports)}${fieldReport.number}` +
-        `?action=attach;incident=${fieldReport.incident}`;
+        `?action=attach&incident=${fieldReport.incident}`;
     const { err: attachErr } = await ims.fetchJsonNoThrow(attachToIncidentUrl, {
         body: JSON.stringify({}),
     });

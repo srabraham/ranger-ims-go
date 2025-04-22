@@ -15,9 +15,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig) *http.ServeMux {
 	mux.Handle("GET /ims/static/",
 		Adapt(
 			http.StripPrefix("/ims/", http.FileServerFS(StaticFS)).ServeHTTP,
-			// Static isn't quite ready yet. We don't want to return the caching
-			// Cache-Control header on 400/500 responses.
-			//Static(1*time.Hour),
+			Static(1*time.Hour),
 		),
 	)
 	mux.Handle("GET /ims/app",
@@ -93,8 +91,10 @@ func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
 }
 
 func AdaptTempl(comp templ.Component, adapters ...Adapter) http.Handler {
+	adapters = append(adapters, Static(1*time.Hour))
 	return Adapt(
 		func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Cache-Control", "max-age=1200, private")
 			err := comp.Render(req.Context(), w)
 			if err != nil {
 				slog.Error("Failed to render template", "error", err)

@@ -52,7 +52,7 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
-
+	w.Header().Set("Cache-Control", "max-age=1200, private")
 	writeJSON(w, resp)
 }
 

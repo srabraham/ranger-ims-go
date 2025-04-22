@@ -35,6 +35,23 @@ func (q *Queries) AddEventAccess(ctx context.Context, arg AddEventAccessParams) 
 	return result.LastInsertId()
 }
 
+const attachFieldReportToIncident = `-- name: AttachFieldReportToIncident :exec
+update FIELD_REPORT
+set INCIDENT_NUMBER = ?
+where EVENT = ? and NUMBER = ?
+`
+
+type AttachFieldReportToIncidentParams struct {
+	IncidentNumber sql.NullInt32
+	Event          int32
+	Number         int32
+}
+
+func (q *Queries) AttachFieldReportToIncident(ctx context.Context, arg AttachFieldReportToIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, attachFieldReportToIncident, arg.IncidentNumber, arg.Event, arg.Number)
+	return err
+}
+
 const clearEventAccessForExpression = `-- name: ClearEventAccessForExpression :exec
 delete from EVENT_ACCESS
 where EVENT = ? and EXPRESSION = ?
@@ -272,13 +289,11 @@ from
 where
     irre.EVENT = ?
     and irre.FIELD_REPORT_NUMBER = ?
-    and re.GENERATED <= ?
 `
 
 type FieldReport_ReportEntriesParams struct {
 	Event             int32
 	FieldReportNumber int32
-	Generated         bool
 }
 
 type FieldReport_ReportEntriesRow struct {
@@ -286,7 +301,7 @@ type FieldReport_ReportEntriesRow struct {
 }
 
 func (q *Queries) FieldReport_ReportEntries(ctx context.Context, arg FieldReport_ReportEntriesParams) ([]FieldReport_ReportEntriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, fieldReport_ReportEntries, arg.Event, arg.FieldReportNumber, arg.Generated)
+	rows, err := q.db.QueryContext(ctx, fieldReport_ReportEntries, arg.Event, arg.FieldReportNumber)
 	if err != nil {
 		return nil, err
 	}

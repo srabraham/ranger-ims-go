@@ -171,7 +171,13 @@ from
 where
     irre.EVENT = ?
     and irre.FIELD_REPORT_NUMBER = ?
-    and re.GENERATED <= ?
 ;
+
+-- name: AttachFieldReportToIncident :exec
+update FIELD_REPORT
+set INCIDENT_NUMBER = ?
+where EVENT = ? and NUMBER = ?
+;
+
 
 

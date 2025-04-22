@@ -61,12 +61,14 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 	for _, r := range rows {
 		fr := r.FieldReport
+		entries := entriesByFR[fr.Number]
 		resp = append(resp, imsjson.FieldReport{
-			Event:    ptr(event.Name),
-			Number:   ptr(fr.Number),
-			Created:  ptr(time.Unix(int64(fr.Created), 0)),
-			Summary:  stringOrNil(fr.Summary),
-			Incident: int32OrNil(fr.IncidentNumber),
+			Event:         ptr(event.Name),
+			Number:        ptr(fr.Number),
+			Created:       ptr(time.Unix(int64(fr.Created), 0)),
+			Summary:       stringOrNil(fr.Summary),
+			Incident:      int32OrNil(fr.IncidentNumber),
+			ReportEntries: &entries,
 		})
 	}
 
@@ -137,4 +139,55 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	}
 	response.ReportEntries = &entries
 	writeJSON(w, response)
+}
+
+type EditFieldReport struct {
+	imsDB *sql.DB
+}
+
+func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	if ok := parseForm(w, req); !ok {
+		return
+	}
+
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	if !ok {
+		return
+	}
+
+	fieldReportNumber, _ := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
+
+	queryAction := req.FormValue("action")
+	if queryAction != "" {
+		var incident sql.NullInt32
+
+		switch queryAction {
+		case "attach":
+			num, _ := strconv.ParseInt(req.FormValue("incident"), 10, 32)
+			incident = sql.NullInt32{Int32: int32(num), Valid: true}
+		case "detach":
+			incident = sql.NullInt32{Valid: false}
+		default:
+			slog.Error("Invalid action", "action", req.FormValue("action"))
+			http.Error(w, "Invalid action", http.StatusBadRequest)
+			return
+		}
+		_ = imsdb.New(action.imsDB).AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
+			IncidentNumber: incident,
+			Event:          event.ID,
+			Number:         int32(fieldReportNumber),
+		})
+		slog.Info("attached FR to incident", "event", event.ID, "incident", incident, "FR", fieldReportNumber)
+	}
+
+	//event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	//if !ok {
+	//	return
+	//}
+	//slog.Info("in fieldreport", "attach", req.FormValue("action"), "detach", req.FormValue("detach"))
+}
+
+func (action EditFieldReport) attachToIncident(w http.ResponseWriter, req *http.Request) {
+
 }

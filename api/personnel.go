@@ -34,6 +34,6 @@ func (action GetPersonnel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			DirectoryID: r.ID,
 		})
 	}
-
+	w.Header().Set("Cache-Control", "max-age=1200, private")
 	writeJSON(w, response)
 }

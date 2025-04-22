@@ -824,8 +824,8 @@ async function addIncidentType() {
 async function detachFieldReport(sender) {
     const parent = sender.parentElement;
     const frNumber = parent.getAttribute("fr-number");
-    const url = (ims.urlReplace(url_fieldReports) + frNumber +
-        "?action=detach;incident=" + ims.pathIds.incidentNumber);
+    const url = (`${ims.urlReplace(url_fieldReports)}/${frNumber}` +
+        `?action=detach&incident=${ims.pathIds.incidentNumber}`);
     const { err } = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify({}),
     });
@@ -850,8 +850,8 @@ async function attachFieldReport() {
     }
     const select = document.getElementById("attached_field_report_add");
     const fieldReportNumber = select.value;
-    const url = (ims.urlReplace(url_fieldReports) + fieldReportNumber +
-        "?action=attach;incident=" + ims.pathIds.incidentNumber);
+    const url = (`${ims.urlReplace(url_fieldReports)}/${fieldReportNumber}` +
+        `?action=attach&incident=${ims.pathIds.incidentNumber}`);
     const { err } = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify({}),
     });

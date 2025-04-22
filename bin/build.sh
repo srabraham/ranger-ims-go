@@ -6,6 +6,7 @@ reporoot=$(git rev-parse --show-toplevel)
 
 echo "invoking sqlc generate"
 cd "${reporoot}"
+go tool sqlc generate
 echo "finished sqlc generate"
 
 echo "invoking templ generate"
