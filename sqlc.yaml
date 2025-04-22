@@ -1,16 +1,16 @@
 version: "2"
 sql:
-  - engine: "mysql"
-    queries: "store/queries.sql"
-    schema: "store/schema.sql"
-    gen:
-      go:
-        package: "imsdb"
-        out: "store/imsdb"
-  - engine: "mysql"
-    queries: "directory/queries.sql"
-    schema: "directory/schema.sql"
-    gen:
-      go:
-        package: "clubhousedb"
-        out: "directory/clubhousedb"
+- engine: "mysql"
+  queries: "store/queries.sql"
+  schema: "store/schema.sql"
+  gen:
+    go:
+      package: "imsdb"
+      out: "store/imsdb"
+- engine: "mysql"
+  queries: "directory/queries.sql"
+  schema: "directory/schema.sql"
+  gen:
+    go:
+      package: "clubhousedb"
+      out: "directory/clubhousedb"

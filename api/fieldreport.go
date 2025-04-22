@@ -16,6 +16,9 @@ type GetFieldReports struct {
 }
 
 func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.Request) {
+	resp := make(imsjson.FieldReports, 0)
+	ctx := req.Context()
+
 	if ok := parseForm(w, req); !ok {
 		return
 	}
@@ -25,7 +28,7 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 	if !ok {
 		return
 	}
-	reportEntries, err := imsdb.New(handler.imsDB).FieldReports_ReportEntries(req.Context(),
+	reportEntries, err := imsdb.New(handler.imsDB).FieldReports_ReportEntries(ctx,
 		imsdb.FieldReports_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
@@ -50,13 +53,11 @@ func (handler GetFieldReports) getFieldReports(w http.ResponseWriter, req *http.
 		})
 	}
 
-	rows, err := imsdb.New(handler.imsDB).FieldReports(req.Context(), event.ID)
+	rows, err := imsdb.New(handler.imsDB).FieldReports(ctx, event.ID)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-
-	resp := make(imsjson.FieldReports, 0)
 
 	for _, r := range rows {
 		fr := r.FieldReport
@@ -78,6 +79,7 @@ type GetFieldReport struct {
 
 func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Request) {
 	response := imsjson.FieldReport{}
+	ctx := req.Context()
 
 	event, ok := eventFromName(w, req, req.PathValue("eventName"), handler.imsDB)
 	if !ok {
@@ -90,7 +92,7 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	reportEntryRows, err := imsdb.New(handler.imsDB).FieldReport_ReportEntries(req.Context(),
+	reportEntryRows, err := imsdb.New(handler.imsDB).FieldReport_ReportEntries(ctx,
 		imsdb.FieldReport_ReportEntriesParams{
 			Event:             event.ID,
 			FieldReportNumber: int32(fieldReportNumber),
@@ -101,7 +103,7 @@ func (handler GetFieldReport) getFieldReport(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	frRow, err := imsdb.New(handler.imsDB).FieldReport(req.Context(), imsdb.FieldReportParams{
+	frRow, err := imsdb.New(handler.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
 		Event:  event.ID,
 		Number: int32(fieldReportNumber),
 	})

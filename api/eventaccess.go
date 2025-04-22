@@ -16,13 +16,11 @@ type GetEventAccesses struct {
 	imsDB *sql.DB
 }
 
-func (hand GetEventAccesses) getEventAccesses(w http.ResponseWriter, req *http.Request) {
+func (action GetEventAccesses) handler(w http.ResponseWriter, req *http.Request) {
 	resp := imsjson.EventsAccess{}
+	ctx := req.Context()
 
-	eventName := req.PathValue("eventName")
-
-	var err error
-	resp, err = GetEventsAccess(req.Context(), hand.imsDB, eventName)
+	resp, err := GetEventsAccess(ctx, action.imsDB, "")
 	if err != nil {
 		slog.Error("GetEventsAccess failed", "error", err)
 		http.Error(w, "Failed to get events access", http.StatusInternalServerError)
@@ -33,23 +31,23 @@ func (hand GetEventAccesses) getEventAccesses(w http.ResponseWriter, req *http.R
 
 func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
 	var events []imsdb.Event
-	if eventName != "" {
-		eventRow, err := imsdb.New(imsDB).QueryEventID(ctx, eventName)
-		if err != nil {
-			return nil, fmt.Errorf("[QueryEventID]: %w", err)
-		}
-		events = append(events, eventRow.Event)
-	} else {
-		allEventRows, err := imsdb.New(imsDB).Events(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("[Events]: %w", err)
-		}
-		for _, aer := range allEventRows {
-			events = append(events, aer.Event)
-		}
+	//if eventName != "" {
+	//	eventRow, err := imsdb.New(imsDB).QueryEventID(ctx, eventName)
+	//	if err != nil {
+	//		return nil, fmt.Errorf("[QueryEventID]: %w", err)
+	//	}
+	//	events = append(events, eventRow.Event)
+	//} else {
+	allEventRows, err := imsdb.New(imsDB).Events(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("[Events]: %w", err)
 	}
+	for _, aer := range allEventRows {
+		events = append(events, aer.Event)
+	}
+	//}
 
-	resp := make(imsjson.EventsAccess)
+	result := make(imsjson.EventsAccess)
 
 	for _, e := range events {
 		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, e.ID)
@@ -73,16 +71,17 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 				ea.Reporters = append(ea.Reporters, rule)
 			}
 		}
-		resp[e.Name] = ea
+		result[e.Name] = ea
 	}
-	return resp, nil
+	return result, nil
 }
 
 type PostEventAccess struct {
 	imsDB *sql.DB
 }
 
-func (handler PostEventAccess) postEventAccess(w http.ResponseWriter, req *http.Request) {
+func (action PostEventAccess) handler(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
 	if ok := parseForm(w, req); !ok {
 		return
 	}
@@ -98,13 +97,13 @@ func (handler PostEventAccess) postEventAccess(w http.ResponseWriter, req *http.
 	}
 	var errs []error
 	for eventName, access := range eventsAccess {
-		event, success := eventFromName(w, req, eventName, handler.imsDB)
+		event, success := eventFromName(w, req, eventName, action.imsDB)
 		if !success {
 			return
 		}
-		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Readers, imsdb.EventAccessModeRead))
-		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Writers, imsdb.EventAccessModeWrite))
-		errs = append(errs, handler.maybeSetAccess(req.Context(), event, access.Reporters, imsdb.EventAccessModeReport))
+		errs = append(errs, action.maybeSetAccess(ctx, event, access.Readers, imsdb.EventAccessModeRead))
+		errs = append(errs, action.maybeSetAccess(ctx, event, access.Writers, imsdb.EventAccessModeWrite))
+		errs = append(errs, action.maybeSetAccess(ctx, event, access.Reporters, imsdb.EventAccessModeReport))
 	}
 	if err := errors.Join(errs...); err != nil {
 		slog.Error("PostEventAccess", "error", err)
@@ -114,16 +113,16 @@ func (handler PostEventAccess) postEventAccess(w http.ResponseWriter, req *http.
 	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
 }
 
-func (handler PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Event, rules []imsjson.AccessRule, mode imsdb.EventAccessMode) error {
+func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Event, rules []imsjson.AccessRule, mode imsdb.EventAccessMode) error {
 	if len(rules) == 0 {
 		return nil
 	}
-	txn, err := handler.imsDB.BeginTx(ctx, nil)
+	txn, err := action.imsDB.BeginTx(ctx, nil)
 	defer txn.Rollback()
 	if err != nil {
 		return fmt.Errorf("[BeginTx]: %w", err)
 	}
-	err = imsdb.New(handler.imsDB).WithTx(txn).ClearEventAccessForMode(ctx, imsdb.ClearEventAccessForModeParams{
+	err = imsdb.New(action.imsDB).WithTx(txn).ClearEventAccessForMode(ctx, imsdb.ClearEventAccessForModeParams{
 		Event: event.ID,
 		Mode:  mode,
 	})
@@ -131,14 +130,14 @@ func (handler PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.E
 		return fmt.Errorf("[ClearEventAccessForMode]: %w", err)
 	}
 	for _, rule := range rules {
-		err = imsdb.New(handler.imsDB).WithTx(txn).ClearEventAccessForExpression(ctx, imsdb.ClearEventAccessForExpressionParams{
+		err = imsdb.New(action.imsDB).WithTx(txn).ClearEventAccessForExpression(ctx, imsdb.ClearEventAccessForExpressionParams{
 			Event:      event.ID,
 			Expression: rule.Expression,
 		})
 		if err != nil {
 			return fmt.Errorf("[ClearEventAccessForExpression]: %w", err)
 		}
-		_, err = imsdb.New(handler.imsDB).WithTx(txn).AddEventAccess(ctx, imsdb.AddEventAccessParams{
+		_, err = imsdb.New(action.imsDB).WithTx(txn).AddEventAccess(ctx, imsdb.AddEventAccessParams{
 			Event:      event.ID,
 			Expression: rule.Expression,
 			Mode:       mode,

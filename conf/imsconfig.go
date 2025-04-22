@@ -12,6 +12,13 @@ func DefaultIMS() *IMSConfig {
 			JWTSecret:  uuid.New().String(),
 			Deployment: "dev",
 		},
+		Store: Store{
+			MySQL: StoreMySQL{
+				HostName: "localhost",
+				HostPort: 3306,
+				Database: "ims",
+			},
+		},
 	}
 }
 
@@ -25,18 +32,7 @@ type IMSConfig struct {
 			S3Bucket          string
 		}
 	}
-	Store struct {
-		SQLite struct {
-			File string
-		}
-		MySQL struct {
-			HostName string
-			HostPort int32
-			Database string
-			Username string
-			Password string
-		}
-	}
+	Store     Store
 	Directory struct {
 		File struct {
 			File string
@@ -66,4 +62,19 @@ type ConfigCore struct {
 	JWTSecret        string
 	AttachmentsStore string
 	Deployment       string
+}
+
+type Store struct {
+	SQLite struct {
+		File string
+	}
+	MySQL StoreMySQL
+}
+
+type StoreMySQL struct {
+	HostName string
+	HostPort int32
+	Database string
+	Username string
+	Password string
 }

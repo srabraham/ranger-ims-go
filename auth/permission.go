@@ -25,58 +25,56 @@ type Permission string
 const (
 	// Event-specific permissions
 
-	ReadIncidents        Permission = "ReadIncidents"
-	WriteIncidents       Permission = "WriteIncidents"
-	ReadAllFieldReports  Permission = "ReadAllFieldReports"
-	WriteAllFieldReports Permission = "WriteAllFieldReports"
-	WriteOwnFieldReports Permission = "WriteOwnFieldReports"
-	ReadOwnFieldReports  Permission = "ReadOwnFieldReports"
-	ReadEventName        Permission = "ReadEventName"
-	ReadEventStreets     Permission = "ReadEventStreets"
+	ReadIncidents     Permission = "ReadIncidents"
+	WriteIncidents    Permission = "WriteIncidents"
+	ReadFieldReports  Permission = "ReadFieldReports"
+	WriteFieldReports Permission = "WriteFieldReports"
+	ReadEventName     Permission = "ReadEventName"
+	ReadEventStreets  Permission = "ReadEventStreets"
 
 	// Permissions that aren't event-specific
 
-	ReadIncidentTypes Permission = "ReadIncidentTypes"
-	ReadPersonnel     Permission = "ReadPersonnel"
-	AdminIMS          Permission = "AdminIMS"
+	ReadIncidentTypes         Permission = "ReadIncidentTypes"
+	ReadPersonnel             Permission = "ReadPersonnel"
+	AdministrateEvents        Permission = "AdministrateEvents"
+	AdministrateStreets       Permission = "AdministrateStreets"
+	AdministrateIncidentTypes Permission = "AdministrateIncidentTypes"
 )
 
 var RolesToPerms = map[Role]map[Permission]bool{
 	AnyAuthenticatedUser: {
 		ReadIncidentTypes: true,
-		ReadIncidents:     true,
 		ReadPersonnel:     true,
 	},
 	EventReporter: {
-		ReadEventName:        true,
-		ReadIncidentTypes:    true,
-		ReadEventStreets:     true,
-		WriteOwnFieldReports: true,
-		ReadOwnFieldReports:  true,
+		ReadEventName:     true,
+		ReadIncidentTypes: true,
+		ReadEventStreets:  true,
+		ReadFieldReports:  true,
+		WriteFieldReports: true,
 	},
 	EventReader: {
-		ReadEventName:       true,
-		ReadEventStreets:    true,
-		ReadIncidents:       true,
-		ReadIncidentTypes:   true,
-		ReadAllFieldReports: true,
-		ReadOwnFieldReports: true,
-		ReadPersonnel:       true,
+		ReadEventName:     true,
+		ReadEventStreets:  true,
+		ReadIncidents:     true,
+		ReadIncidentTypes: true,
+		ReadFieldReports:  true,
+		ReadPersonnel:     true,
 	},
 	EventWriter: {
-		ReadEventName:        true,
-		ReadEventStreets:     true,
-		ReadIncidents:        true,
-		ReadIncidentTypes:    true,
-		WriteIncidents:       true,
-		ReadAllFieldReports:  true,
-		WriteAllFieldReports: true,
-		WriteOwnFieldReports: true,
-		ReadOwnFieldReports:  true,
-		ReadPersonnel:        true,
+		ReadEventName:     true,
+		ReadEventStreets:  true,
+		ReadIncidents:     true,
+		ReadIncidentTypes: true,
+		WriteIncidents:    true,
+		ReadFieldReports:  true,
+		WriteFieldReports: true,
+		ReadPersonnel:     true,
 	},
 	Administrator: {
-		AdminIMS: true,
+		AdministrateEvents:        true,
+		AdministrateStreets:       true,
+		AdministrateIncidentTypes: true,
 	},
 }
 

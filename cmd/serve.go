@@ -33,14 +33,13 @@ to quickly create a Cobra application.`,
 func runServer(cmd *cobra.Command, args []string) {
 	fmt.Println("serve called")
 
-	db := store.MariaDB()
-
+	imsDB := store.MariaDB(conf.Cfg)
 	clubhouseDB := directory.MariaDB()
 
 	mux := http.NewServeMux()
-	api.AddToMux(mux, conf.Cfg, db, clubhouseDB)
+	api.AddToMux(mux, conf.Cfg, imsDB, clubhouseDB)
 	web.AddToMux(mux, conf.Cfg)
-	//mux := api.CreateMux(context.Background(), db, clubhouseDB)
+	//mux := api.CreateMux(context.Background(), imsDB, clubhouseDB)
 
 	addr := fmt.Sprintf("%v:%v", conf.Cfg.Core.Host, conf.Cfg.Core.Port)
 	s := &http.Server{

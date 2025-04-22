@@ -169,7 +169,7 @@ func (hand GetAuth) getAuth(w http.ResponseWriter, req *http.Request) {
 			eventName: {
 				ReadIncidents:     permissions[auth.ReadIncidents],
 				WriteIncidents:    permissions[auth.WriteIncidents],
-				WriteFieldReports: permissions[auth.WriteOwnFieldReports],
+				WriteFieldReports: permissions[auth.WriteFieldReports],
 				AttachFiles:       false,
 			},
 		}

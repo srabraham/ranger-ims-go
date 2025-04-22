@@ -1,19 +1,19 @@
 -- name: QueryEventID :one
-select sqlc.embed(EVENT) from EVENT where NAME = ?;
+select sqlc.embed(e) from EVENT e where e.NAME = ?;
 
 -- name: SchemaVersion :one
 select VERSION from SCHEMA_INFO;
 
 -- name: Events :many
-select sqlc.embed(EVENT) from EVENT;
+select sqlc.embed(e) from EVENT e;
 
 -- name: CreateEvent :execlastid
 insert into EVENT (NAME) values (?);
 
 -- name: EventAccess :many
-select sqlc.embed(EVENT_ACCESS)
-from EVENT_ACCESS
-where EVENT = ?;
+select sqlc.embed(ea)
+from EVENT_ACCESS ea
+where ea.EVENT = ?;
 
 -- name: ClearEventAccessForMode :exec
 delete from EVENT_ACCESS
@@ -134,19 +134,19 @@ from CONCENTRIC_STREET
 where EVENT = ?;
 
 -- name: IncidentTypes :many
-select sqlc.embed(INCIDENT_TYPE)
-from INCIDENT_TYPE;
+select sqlc.embed(it)
+from INCIDENT_TYPE it;
 
 -- name: FieldReports :many
-select sqlc.embed(FIELD_REPORT)
-from FIELD_REPORT
-where EVENT = ?;
+select sqlc.embed(fr)
+from FIELD_REPORT fr
+where fr.EVENT = ?;
 
 -- name: FieldReport :one
-select sqlc.embed(FIELD_REPORT)
-from FIELD_REPORT
-where EVENT = ?
-    and NUMBER = ?;
+select sqlc.embed(fr)
+from FIELD_REPORT fr
+where fr.EVENT = ?
+    and fr.NUMBER = ?;
 
 -- name: FieldReports_ReportEntries :many
 select

@@ -164,9 +164,9 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 }
 
 const eventAccess = `-- name: EventAccess :many
-select event_access.id, event_access.event, event_access.expression, event_access.mode, event_access.validity
-from EVENT_ACCESS
-where EVENT = ?
+select ea.id, ea.event, ea.expression, ea.mode, ea.validity
+from EVENT_ACCESS ea
+where ea.EVENT = ?
 `
 
 type EventAccessRow struct {
@@ -203,7 +203,7 @@ func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRo
 }
 
 const events = `-- name: Events :many
-select event.id, event.name from EVENT
+select e.id, e.name from EVENT e
 `
 
 type EventsRow struct {
@@ -234,10 +234,10 @@ func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
 }
 
 const fieldReport = `-- name: FieldReport :one
-select field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
-from FIELD_REPORT
-where EVENT = ?
-    and NUMBER = ?
+select fr.event, fr.number, fr.created, fr.summary, fr.incident_number
+from FIELD_REPORT fr
+where fr.EVENT = ?
+    and fr.NUMBER = ?
 `
 
 type FieldReportParams struct {
@@ -317,9 +317,9 @@ func (q *Queries) FieldReport_ReportEntries(ctx context.Context, arg FieldReport
 }
 
 const fieldReports = `-- name: FieldReports :many
-select field_report.event, field_report.number, field_report.created, field_report.summary, field_report.incident_number
-from FIELD_REPORT
-where EVENT = ?
+select fr.event, fr.number, fr.created, fr.summary, fr.incident_number
+from FIELD_REPORT fr
+where fr.EVENT = ?
 `
 
 type FieldReportsRow struct {
@@ -473,8 +473,8 @@ func (q *Queries) Incident(ctx context.Context, arg IncidentParams) (IncidentRow
 }
 
 const incidentTypes = `-- name: IncidentTypes :many
-select incident_type.id, incident_type.name, incident_type.hidden
-from INCIDENT_TYPE
+select it.id, it.name, it.hidden
+from INCIDENT_TYPE it
 `
 
 type IncidentTypesRow struct {
@@ -691,7 +691,7 @@ func (q *Queries) Incidents_ReportEntries(ctx context.Context, arg Incidents_Rep
 }
 
 const queryEventID = `-- name: QueryEventID :one
-select event.id, event.name from EVENT where NAME = ?
+select e.id, e.name from EVENT e where e.NAME = ?
 `
 
 type QueryEventIDRow struct {
