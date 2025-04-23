@@ -47,13 +47,6 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 	for _, row := range reportEntries {
 		re := row.ReportEntry
 		entriesByFR[row.FieldReportNumber] = append(entriesByFR[row.FieldReportNumber], imsjson.ReportEntry{
-			//ID:            ptr(re.ID),
-			//Created:       ptr(time.Unix(int64(re.Created), 0)),
-			//Author:        ptr(re.Author),
-			//SystemEntry:   ptr(re.Generated),
-			//Text:          ptr(re.Text),
-			//Stricken:      ptr(re.Stricken),
-			//HasAttachment: ptr(re.AttachedFile.String != ""),
 			ID:            re.ID,
 			Created:       time.Unix(int64(re.Created), 0),
 			Author:        re.Author,
@@ -175,28 +168,41 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
 	fieldReportNumber, _ := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
 
 	queryAction := req.FormValue("action")
 	if queryAction != "" {
 		var incident sql.NullInt32
 
+		entryText := ""
 		switch queryAction {
 		case "attach":
 			num, _ := strconv.ParseInt(req.FormValue("incident"), 10, 32)
 			incident = sql.NullInt32{Int32: int32(num), Valid: true}
+			entryText = fmt.Sprintf("Attached to incident %v", num)
 		case "detach":
 			incident = sql.NullInt32{Valid: false}
+			entryText = "Detached from incident"
 		default:
 			slog.Error("Invalid action", "action", req.FormValue("action"))
 			http.Error(w, "Invalid action", http.StatusBadRequest)
 			return
 		}
-		_ = imsdb.New(action.imsDB).AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
+		err := imsdb.New(action.imsDB).AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
 			IncidentNumber: incident,
 			Event:          event.ID,
 			Number:         int32(fieldReportNumber),
 		})
+		if err != nil {
+			panic(err)
+		}
+		err = addFRReportEntry(ctx, imsdb.New(action.imsDB), event.ID, int32(fieldReportNumber), author, entryText, true)
+		if err != nil {
+			panic(err)
+		}
 		slog.Info("attached FR to incident", "event", event.ID, "incident", incident.Int32, "FR", fieldReportNumber)
 	}
 
@@ -213,9 +219,6 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 	})
 
 	storedFR := frr.FieldReport
-
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
-	author := jwtCtx.Claims.RangerHandle()
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()

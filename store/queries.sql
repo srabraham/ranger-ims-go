@@ -258,3 +258,39 @@ where ID IN (
       and REPORT_ENTRY = ?
 );
 
+-- name: AttachRangerHandleToIncident :exec
+insert into INCIDENT__RANGER (EVENT, INCIDENT_NUMBER, RANGER_HANDLE)
+values (?, ?, ?);
+
+-- name: DetachRangerHandleFromIncident :exec
+delete from INCIDENT__RANGER
+where
+    EVENT = ?
+    and INCIDENT_NUMBER = ?
+    and RANGER_HANDLE = ?
+;
+
+-- name: AttachIncidentTypeToIncident :exec
+insert into INCIDENT__INCIDENT_TYPE (
+    EVENT, INCIDENT_NUMBER, INCIDENT_TYPE
+) values (
+    ?, ?, (select it.ID from INCIDENT_TYPE it where it.NAME = ?)
+);
+
+-- name: DetachIncidentTypeFromIncident :exec
+delete from INCIDENT__INCIDENT_TYPE
+where
+    EVENT = ?
+    and INCIDENT_NUMBER = ?
+    and INCIDENT_TYPE = (select it.ID from INCIDENT_TYPE it where it.NAME = ?)
+;
+
+-- name: CreateIncidentTypeOrIgnore :exec
+insert into INCIDENT_TYPE (NAME, HIDDEN)
+values (?, ?)
+    on duplicate key update NAME=NAME
+;
+
+-- name: HideShowIncidentType :exec
+update INCIDENT_TYPE set HIDDEN = ?
+where NAME = ?;

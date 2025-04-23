@@ -97,6 +97,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}",
+		Adapt(
+			EditIncident{imsDB: db, es: es},
+			LogBeforeAfter(),
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.WriteIncidents, db, cfg.Core.Admins),
+		),
+	)
+
 	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}/report_entries/{reportEntryId}",
 		Adapt(
 			EditIncidentReportEntry{imsDB: db, eventSource: es},
@@ -196,6 +206,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			RequireAuthorization(auth.ReadIncidentTypes, db, cfg.Core.Admins),
+		),
+	)
+
+	mux.Handle("POST /ims/api/incident_types",
+		Adapt(
+			EditIncidentTypes{imsDB: db},
+			LogBeforeAfter(),
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.AdministrateIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
 

@@ -52,6 +52,41 @@ func (q *Queries) AttachFieldReportToIncident(ctx context.Context, arg AttachFie
 	return err
 }
 
+const attachIncidentTypeToIncident = `-- name: AttachIncidentTypeToIncident :exec
+insert into INCIDENT__INCIDENT_TYPE (
+    EVENT, INCIDENT_NUMBER, INCIDENT_TYPE
+) values (
+    ?, ?, (select it.ID from INCIDENT_TYPE it where it.NAME = ?)
+)
+`
+
+type AttachIncidentTypeToIncidentParams struct {
+	Event          int32
+	IncidentNumber int32
+	Name           string
+}
+
+func (q *Queries) AttachIncidentTypeToIncident(ctx context.Context, arg AttachIncidentTypeToIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, attachIncidentTypeToIncident, arg.Event, arg.IncidentNumber, arg.Name)
+	return err
+}
+
+const attachRangerHandleToIncident = `-- name: AttachRangerHandleToIncident :exec
+insert into INCIDENT__RANGER (EVENT, INCIDENT_NUMBER, RANGER_HANDLE)
+values (?, ?, ?)
+`
+
+type AttachRangerHandleToIncidentParams struct {
+	Event          int32
+	IncidentNumber int32
+	RangerHandle   string
+}
+
+func (q *Queries) AttachRangerHandleToIncident(ctx context.Context, arg AttachRangerHandleToIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, attachRangerHandleToIncident, arg.Event, arg.IncidentNumber, arg.RangerHandle)
+	return err
+}
+
 const attachReportEntryToFieldReport = `-- name: AttachReportEntryToFieldReport :exec
 insert into FIELD_REPORT__REPORT_ENTRY (
     EVENT, FIELD_REPORT_NUMBER, REPORT_ENTRY
@@ -279,6 +314,22 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 	return result.LastInsertId()
 }
 
+const createIncidentTypeOrIgnore = `-- name: CreateIncidentTypeOrIgnore :exec
+insert into INCIDENT_TYPE (NAME, HIDDEN)
+values (?, ?)
+    on duplicate key update NAME=NAME
+`
+
+type CreateIncidentTypeOrIgnoreParams struct {
+	Name   string
+	Hidden bool
+}
+
+func (q *Queries) CreateIncidentTypeOrIgnore(ctx context.Context, arg CreateIncidentTypeOrIgnoreParams) error {
+	_, err := q.db.ExecContext(ctx, createIncidentTypeOrIgnore, arg.Name, arg.Hidden)
+	return err
+}
+
 const createReportEntry = `-- name: CreateReportEntry :execlastid
 insert into REPORT_ENTRY (
     AUTHOR, TEXT, CREATED, ` + "`" + `GENERATED` + "`" + `, STRICKEN, ATTACHED_FILE
@@ -309,6 +360,44 @@ func (q *Queries) CreateReportEntry(ctx context.Context, arg CreateReportEntryPa
 		return 0, err
 	}
 	return result.LastInsertId()
+}
+
+const detachIncidentTypeFromIncident = `-- name: DetachIncidentTypeFromIncident :exec
+delete from INCIDENT__INCIDENT_TYPE
+where
+    EVENT = ?
+    and INCIDENT_NUMBER = ?
+    and INCIDENT_TYPE = (select it.ID from INCIDENT_TYPE it where it.NAME = ?)
+`
+
+type DetachIncidentTypeFromIncidentParams struct {
+	Event          int32
+	IncidentNumber int32
+	Name           string
+}
+
+func (q *Queries) DetachIncidentTypeFromIncident(ctx context.Context, arg DetachIncidentTypeFromIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, detachIncidentTypeFromIncident, arg.Event, arg.IncidentNumber, arg.Name)
+	return err
+}
+
+const detachRangerHandleFromIncident = `-- name: DetachRangerHandleFromIncident :exec
+delete from INCIDENT__RANGER
+where
+    EVENT = ?
+    and INCIDENT_NUMBER = ?
+    and RANGER_HANDLE = ?
+`
+
+type DetachRangerHandleFromIncidentParams struct {
+	Event          int32
+	IncidentNumber int32
+	RangerHandle   string
+}
+
+func (q *Queries) DetachRangerHandleFromIncident(ctx context.Context, arg DetachRangerHandleFromIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, detachRangerHandleFromIncident, arg.Event, arg.IncidentNumber, arg.RangerHandle)
+	return err
 }
 
 const detachedFieldReportNumbers = `-- name: DetachedFieldReportNumbers :many
@@ -582,6 +671,21 @@ func (q *Queries) FieldReports_ReportEntries(ctx context.Context, arg FieldRepor
 		return nil, err
 	}
 	return items, nil
+}
+
+const hideShowIncidentType = `-- name: HideShowIncidentType :exec
+update INCIDENT_TYPE set HIDDEN = ?
+where NAME = ?
+`
+
+type HideShowIncidentTypeParams struct {
+	Hidden bool
+	Name   string
+}
+
+func (q *Queries) HideShowIncidentType(ctx context.Context, arg HideShowIncidentTypeParams) error {
+	_, err := q.db.ExecContext(ctx, hideShowIncidentType, arg.Hidden, arg.Name)
+	return err
 }
 
 const incident = `-- name: Incident :one
