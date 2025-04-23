@@ -62,10 +62,10 @@ function drawStreets() {
     for (const event of eventDatas) {
         const eventStreets = _streetsTemplate.cloneNode(true);
         // Add an id to the element for future reference
-        eventStreets.id = `event_streets_${event.id}`;
+        eventStreets.id = `event_streets_${event.name}`;
         // Add to container
         container.append(eventStreets);
-        updateEventStreets(event.id);
+        updateEventStreets(event.name);
     }
 }
 function updateEventStreets(event) {

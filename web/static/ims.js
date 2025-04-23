@@ -359,7 +359,7 @@ function renderCommonPageItems(authInfo) {
     }
 }
 function renderNavEvents(eds) {
-    const eventIds = eds.map((ed) => ed.id);
+    const eventIds = eds.map((ed) => ed.name);
     eventIds.sort((a, b) => b.localeCompare(a));
     const navEvents = document.getElementById("nav-events");
     for (const id of eventIds) {

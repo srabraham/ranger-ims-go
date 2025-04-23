@@ -412,7 +412,7 @@ function renderCommonPageItems(authInfo: AuthInfo): void {
 }
 
 function renderNavEvents(eds: EventData[]): void {
-    const eventIds: string[] = eds.map((ed) => ed.id);
+    const eventIds: string[] = eds.map((ed) => ed.name);
     eventIds.sort((a, b) => b.localeCompare(a));
     const navEvents = document.getElementById("nav-events") as HTMLUListElement;
     for (const id of eventIds) {
@@ -1316,7 +1316,9 @@ export type FieldReport = {
 export type FieldReportsByNumber = Record<number, FieldReport>;
 
 export type EventData = {
-    id: string,
+    // TODO: id should actually be an int, and some day we should start
+    //  sending it out in the APIs.
+    // id: string,
     name: string,
 }
 
