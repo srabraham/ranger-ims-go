@@ -144,7 +144,7 @@ function initIncidentsTable() {
             return;
         }
         const number = e.data.incident_number;
-        const event = e.data.event_id;
+        const event = e.data.event_name;
         if (event !== ims.pathIds.eventID) {
             return;
         }

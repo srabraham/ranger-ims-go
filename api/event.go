@@ -46,8 +46,7 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if perms[auth.ReadEventName] {
 			resp = append(resp, imsjson.Event{
-				// TODO: eventually add this as the numeric ID
-				//ID:   er.Event.Name,
+				ID:   er.Event.ID,
 				Name: er.Event.Name,
 			})
 		}

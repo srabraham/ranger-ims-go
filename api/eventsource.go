@@ -11,7 +11,7 @@ import (
 const EventSourceChannel = "imsevents"
 
 type IMSEventData struct {
-	EventName         string `json:"event_id,omitzero"`
+	EventName         string `json:"event_name,omitzero"`
 	IncidentNumber    int32  `json:"incident_number,omitzero"`
 	FieldReportNumber int32  `json:"field_report_number,omitzero"`
 	InitialEvent      bool   `json:"initial_event,omitzero"`
@@ -42,7 +42,9 @@ func (e IMSEvent) Event() string {
 
 func (e IMSEvent) Data() string {
 	b, err := json.Marshal(e.EventData)
-	slog.Info("in eventsource data", "err", err, "str", string(b), "id", e.EventID)
+	if err != nil {
+		slog.Error("Error converting IMSEvent to JSON", "EventData", e.EventData, "err", err)
+	}
 	return string(b)
 }
 

@@ -1316,9 +1316,7 @@ export type FieldReport = {
 export type FieldReportsByNumber = Record<number, FieldReport>;
 
 export type EventData = {
-    // TODO: id should actually be an int, and some day we should start
-    //  sending it out in the APIs.
-    // id: string,
+    id: number,
     name: string,
 }
 
@@ -1363,7 +1361,7 @@ interface BroadcastChannelTyped<T> extends EventTarget {
 
 export type IncidentBroadcast = {
     // fields from SSE
-    event_id?: string|null;
+    event_name?: string|null;
     incident_number?: number|null;
     // additional fields for use in BroadcastChannel
     update_all?: boolean;
@@ -1371,7 +1369,7 @@ export type IncidentBroadcast = {
 
 export type FieldReportBroadcast = {
     // fields from SSE
-    event_id?: string|null;
+    event_name?: string|null;
     field_report_number?: number|null;
     // additional fields for use in BroadcastChannel
     update_all?: boolean

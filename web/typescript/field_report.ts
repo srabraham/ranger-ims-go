@@ -77,7 +77,7 @@ async function initFieldReportPage(): Promise<void> {
 
     ims.newFieldReportChannel().onmessage = async function (e: MessageEvent<ims.FieldReportBroadcast>): Promise<void> {
         const number = e.data.field_report_number;
-        const event = e.data.event_id;
+        const event = e.data.event_name;
         const updateAll = e.data.update_all;
 
         if (updateAll || (event === ims.pathIds.eventID && number === ims.pathIds.fieldReportNumber)) {

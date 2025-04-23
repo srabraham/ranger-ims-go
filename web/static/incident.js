@@ -72,7 +72,7 @@ async function initIncidentPage() {
     ims.requestEventSourceLock();
     ims.newIncidentChannel().onmessage = async function (e) {
         const number = e.data.incident_number;
-        const event = e.data.event_id;
+        const event = e.data.event_name;
         const updateAll = e.data.update_all ?? false;
         if (updateAll || (event === ims.pathIds.eventID && number === ims.pathIds.incidentNumber)) {
             console.log("Got incident update: " + number);
@@ -90,7 +90,7 @@ async function initIncidentPage() {
             return;
         }
         const number = e.data.field_report_number;
-        const event = e.data.event_id;
+        const event = e.data.event_name;
         if (event === ims.pathIds.eventID) {
             console.log("Got field report update: " + number);
             await loadOneFieldReport(number);
