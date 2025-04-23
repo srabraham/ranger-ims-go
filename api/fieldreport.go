@@ -282,10 +282,10 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	bod, _ := io.ReadAll(req.Body)
-	defer req.Body.Close()
-	fr := imsjson.FieldReport{}
-	_ = json.Unmarshal(bod, &fr)
+	fr, ok := readBodyAs[imsjson.FieldReport](w, req)
+	if !ok {
+		return
+	}
 
 	if fr.Incident != nil {
 		slog.Error("New FR may not be attached to an incident", "incident", fr.Incident)

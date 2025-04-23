@@ -876,6 +876,18 @@ func (q *Queries) MaxFieldReportNumber(ctx context.Context, event int32) (interf
 	return coalesce, err
 }
 
+const maxIncidentNumber = `-- name: MaxIncidentNumber :one
+select coalesce(max(NUMBER), 0) from INCIDENT
+where EVENT = ?
+`
+
+func (q *Queries) MaxIncidentNumber(ctx context.Context, event int32) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, maxIncidentNumber, event)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
+}
+
 const queryEventID = `-- name: QueryEventID :one
 select e.id, e.name from EVENT e where e.NAME = ?
 `

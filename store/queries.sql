@@ -183,6 +183,10 @@ where EVENT = ? and NUMBER = ?
 select coalesce(max(NUMBER), 0) from FIELD_REPORT
 where EVENT = ?;
 
+-- name: MaxIncidentNumber :one
+select coalesce(max(NUMBER), 0) from INCIDENT
+where EVENT = ?;
+
 -- name: CreateFieldReport :exec
 insert into FIELD_REPORT (
     EVENT, NUMBER, CREATED, SUMMARY, INCIDENT_NUMBER

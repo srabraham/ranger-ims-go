@@ -681,7 +681,7 @@ async function sendEdits(edits) {
         ims.pathIds.incidentNumber = incident.number = newNumber;
         // Update browser history to update URL
         drawIncidentTitle();
-        window.history.pushState(null, document.title, ims.urlReplace(url_viewIncidents) + newNumber);
+        window.history.pushState(null, document.title, `${ims.urlReplace(url_viewIncidents)}/${newNumber}`);
     }
     await loadAndDisplayIncident();
     return { err: null };

@@ -15,15 +15,21 @@ type Location struct {
 	Type         *string `json:"type"`
 }
 
+const (
+	IncidentPriorityHigh   = 5
+	IncidentPriorityNormal = 3
+	IncidentPriorityLow    = 1
+)
+
 type Incident struct {
-	Event         *string       `json:"event"`
-	Number        *int32        `json:"number"`
-	Created       *time.Time    `json:"created"`
-	LastModified  *time.Time    `json:"last_modified"`
-	State         *string       `json:"state"`
-	Priority      *int8         `json:"priority"`
+	Event         string        `json:"event"`
+	Number        int32         `json:"number"`
+	Created       time.Time     `json:"created,omitzero"`
+	LastModified  time.Time     `json:"last_modified,omitzero"`
+	State         string        `json:"state"`
+	Priority      int8          `json:"priority"`
 	Summary       *string       `json:"summary"`
-	Location      *Location     `json:"location"`
+	Location      Location      `json:"location"`
 	IncidentTypes IncidentTypes `json:"incident_types"`
 	FieldReports  []int32       `json:"field_reports"`
 	RangerHandles []string      `json:"ranger_handles"`

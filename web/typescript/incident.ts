@@ -866,7 +866,7 @@ async function sendEdits(edits: ims.Incident): Promise<{err:string|null}> {
         // Update browser history to update URL
         drawIncidentTitle();
         window.history.pushState(
-            null, document.title, ims.urlReplace(url_viewIncidents) + newNumber
+            null, document.title, `${ims.urlReplace(url_viewIncidents)}/${newNumber}`
         );
     }
 
