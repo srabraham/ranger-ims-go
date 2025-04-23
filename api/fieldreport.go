@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/launchdarkly/eventsource"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"io"
@@ -148,7 +147,7 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 
 type EditFieldReport struct {
 	imsDB       *sql.DB
-	eventSource *eventsource.Server
+	eventSource *EventSourcerer
 }
 
 func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -244,13 +243,7 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 	http.Error(w, "Success", http.StatusNoContent)
 
-	action.eventSource.Publish([]string{"imsevents"}, IMSEvent{
-		EventID: idCounter.Add(1),
-		EventData: IMSEventData{
-			EventName:         event.Name,
-			FieldReportNumber: storedFR.Number,
-		},
-	})
+	action.eventSource.notifyFieldReportUpdate(event.Name, storedFR.Number)
 
 	//event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	//if !ok {
@@ -261,7 +254,7 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 type NewFieldReport struct {
 	imsDB       *sql.DB
-	eventSource *eventsource.Server
+	eventSource *EventSourcerer
 }
 
 func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -336,13 +329,7 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/field_reports/"+strconv.FormatInt(newFrNum, 10))
 	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
 
-	action.eventSource.Publish([]string{"imsevents"}, IMSEvent{
-		EventID: idCounter.Add(1),
-		EventData: IMSEventData{
-			EventName:         event.Name,
-			FieldReportNumber: *fr.Number,
-		},
-	})
+	action.eventSource.notifyFieldReportUpdate(event.Name, int32(newFrNum))
 }
 
 func addFRReportEntry(ctx context.Context, q *imsdb.Queries, eventID, frNum int32, author, text string, generated bool) error {

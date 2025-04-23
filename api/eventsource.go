@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 )
 
-var idCounter atomic.Int64
+const EventSourceChannel = "imsevents"
 
 type IMSEventData struct {
 	EventName         string `json:"event_id,omitzero"`
@@ -46,16 +46,48 @@ func (e IMSEvent) Data() string {
 	return string(b)
 }
 
-type initialEventRepository struct {
+type EventSourcerer struct {
+	Server    *eventsource.Server
+	IdCounter atomic.Int64
 }
 
-func (r initialEventRepository) Replay(channel, id string) chan eventsource.Event {
-	if channel != "imsevents" {
+func NewEventSourcerer() *EventSourcerer {
+	es := &EventSourcerer{
+		Server:    eventsource.NewServer(),
+		IdCounter: atomic.Int64{},
+	}
+	es.Server.Register(EventSourceChannel, es)
+	es.Server.ReplayAll = true
+	return es
+}
+
+func (es *EventSourcerer) notifyFieldReportUpdate(eventName string, frNumber int32) {
+	es.Server.Publish([]string{EventSourceChannel}, IMSEvent{
+		EventID: es.IdCounter.Add(1),
+		EventData: IMSEventData{
+			EventName:         eventName,
+			FieldReportNumber: frNumber,
+		},
+	})
+}
+
+func (es *EventSourcerer) notifyIncidentUpdate(eventName string, frNumber int32) {
+	es.Server.Publish([]string{EventSourceChannel}, IMSEvent{
+		EventID: es.IdCounter.Add(1),
+		EventData: IMSEventData{
+			EventName:         eventName,
+			FieldReportNumber: frNumber,
+		},
+	})
+}
+
+func (es *EventSourcerer) Replay(channel, id string) chan eventsource.Event {
+	if channel != EventSourceChannel {
 		return nil
 	}
 	out := make(chan eventsource.Event, 1)
 	out <- IMSEvent{
-		EventID: idCounter.Load(),
+		EventID: es.IdCounter.Load(),
 		EventData: IMSEventData{
 			InitialEvent: true,
 			Comment:      "The most recent SSE ID is provided in this message",

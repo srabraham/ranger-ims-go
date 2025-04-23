@@ -3,10 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
-	"github.com/launchdarkly/eventsource"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
-	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -19,10 +17,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	j := auth.JWTer{SecretKey: cfg.Core.JWTSecret}
 
-	srv := eventsource.NewServer()
-	srv.Register("imsevents", initialEventRepository{})
-	srv.ReplayAll = true
-	srv.Logger = log.Default()
+	es := NewEventSourcerer()
 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
@@ -104,7 +99,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports",
 		Adapt(
-			NewFieldReport{imsDB: db, eventSource: srv},
+			NewFieldReport{imsDB: db, eventSource: es},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
@@ -124,7 +119,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
-			EditFieldReport{imsDB: db, eventSource: srv},
+			EditFieldReport{imsDB: db, eventSource: es},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
@@ -186,7 +181,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("GET /ims/api/eventsource",
 		Adapt(
-			srv.Handler("imsevents"),
+			es.Server.Handler(EventSourceChannel),
 			LogBeforeAfter(),
 		),
 	)
