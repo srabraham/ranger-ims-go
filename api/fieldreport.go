@@ -47,13 +47,20 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 	for _, row := range reportEntries {
 		re := row.ReportEntry
 		entriesByFR[row.FieldReportNumber] = append(entriesByFR[row.FieldReportNumber], imsjson.ReportEntry{
-			ID:            ptr(re.ID),
-			Created:       ptr(time.Unix(int64(re.Created), 0)),
-			Author:        ptr(re.Author),
-			SystemEntry:   ptr(re.Generated),
-			Text:          ptr(re.Text),
-			Stricken:      ptr(re.Stricken),
-			HasAttachment: ptr(re.AttachedFile.String != ""),
+			//ID:            ptr(re.ID),
+			//Created:       ptr(time.Unix(int64(re.Created), 0)),
+			//Author:        ptr(re.Author),
+			//SystemEntry:   ptr(re.Generated),
+			//Text:          ptr(re.Text),
+			//Stricken:      ptr(re.Stricken),
+			//HasAttachment: ptr(re.AttachedFile.String != ""),
+			ID:            re.ID,
+			Created:       time.Unix(int64(re.Created), 0),
+			Author:        re.Author,
+			SystemEntry:   re.Generated,
+			Text:          re.Text,
+			Stricken:      re.Stricken,
+			HasAttachment: re.AttachedFile.String != "",
 		})
 	}
 
@@ -132,13 +139,20 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	for _, rer := range reportEntryRows {
 		re := rer.ReportEntry
 		entries = append(entries, imsjson.ReportEntry{
-			ID:            ptr(re.ID),
-			Created:       ptr(time.Unix(int64(re.Created), 0)),
-			Author:        ptr(re.Author),
-			SystemEntry:   ptr(re.Generated),
-			Text:          ptr(re.Text),
-			Stricken:      ptr(re.Stricken),
-			HasAttachment: ptr(re.AttachedFile.String != ""),
+			ID:            re.ID,
+			Created:       time.Unix(int64(re.Created), 0),
+			Author:        re.Author,
+			SystemEntry:   re.Generated,
+			Text:          re.Text,
+			Stricken:      re.Stricken,
+			HasAttachment: re.AttachedFile.String != "",
+			//ID:            ptr(re.ID),
+			//Created:       ptr(time.Unix(int64(re.Created), 0)),
+			//Author:        ptr(re.Author),
+			//SystemEntry:   ptr(re.Generated),
+			//Text:          ptr(re.Text),
+			//Stricken:      ptr(re.Stricken),
+			//HasAttachment: ptr(re.AttachedFile.String != ""),
 		})
 	}
 	response.ReportEntries = entries
@@ -224,10 +238,10 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		IncidentNumber: storedFR.IncidentNumber,
 	})
 	for _, entry := range requestFR.ReportEntries {
-		if entry.Text == nil {
+		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, *entry.Text, false)
+		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, entry.Text, false)
 		if err != nil {
 			slog.Error("Error adding fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
@@ -298,10 +312,10 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	})
 
 	for _, entry := range fr.ReportEntries {
-		if entry.Text == nil {
+		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, *entry.Text, false)
+		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, entry.Text, false)
 		if err != nil {
 			slog.Error("Error adding system fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)

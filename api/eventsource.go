@@ -73,12 +73,12 @@ func (es *EventSourcerer) notifyFieldReportUpdate(eventName string, frNumber int
 	})
 }
 
-func (es *EventSourcerer) notifyIncidentUpdate(eventName string, frNumber int32) {
+func (es *EventSourcerer) notifyIncidentUpdate(eventName string, incidentNumber int32) {
 	es.Server.Publish([]string{EventSourceChannel}, IMSEvent{
 		EventID: es.IdCounter.Add(1),
 		EventData: IMSEventData{
-			EventName:         eventName,
-			FieldReportNumber: frNumber,
+			EventName:      eventName,
+			IncidentNumber: incidentNumber,
 		},
 	})
 }

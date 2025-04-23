@@ -217,3 +217,40 @@ insert into FIELD_REPORT__REPORT_ENTRY (
 ) values (
     ?, ?, ?
 );
+
+-- name: AttachReportEntryToIncident :exec
+insert into INCIDENT__REPORT_ENTRY (
+    EVENT, INCIDENT_NUMBER, REPORT_ENTRY
+) values (
+    ?, ?, ?
+);
+
+/*
+   The "stricken" queries seem bloated at first blush, because the whole
+   "where ID in (..." could just be "where ID =". What it's doing though is
+   ensuring that the provided eventID and incidentNumber actually align with
+   the reportEntryID in question, and that's important for authorization purposes.
+*/
+
+-- name: SetIncidentReportEntryStricken :exec
+update REPORT_ENTRY
+set STRICKEN = ?
+where ID IN (
+    select REPORT_ENTRY
+    from INCIDENT__REPORT_ENTRY
+    where EVENT = ?
+        and INCIDENT_NUMBER = ?
+        and REPORT_ENTRY = ?
+);
+
+-- name: SetFieldReportReportEntryStricken :exec
+update REPORT_ENTRY
+set STRICKEN = ?
+where ID IN (
+    select REPORT_ENTRY
+    from FIELD_REPORT__REPORT_ENTRY
+    where EVENT = ?
+      and FIELD_REPORT_NUMBER = ?
+      and REPORT_ENTRY = ?
+);
+

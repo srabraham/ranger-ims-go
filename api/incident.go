@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log"
@@ -51,13 +53,20 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, row := range reportEntries {
 		re := row.ReportEntry
 		entriesByIncident[row.IncidentNumber] = append(entriesByIncident[row.IncidentNumber], imsjson.ReportEntry{
-			ID:            ptr(re.ID),
-			Created:       ptr(time.Unix(int64(re.Created), 0)),
-			Author:        ptr(re.Author),
-			SystemEntry:   ptr(re.Generated),
-			Text:          ptr(re.Text),
-			Stricken:      ptr(re.Stricken),
-			HasAttachment: ptr(re.AttachedFile.String != ""),
+			//ID:            ptr(re.ID),
+			//Created:       ptr(time.Unix(int64(re.Created), 0)),
+			//Author:        ptr(re.Author),
+			//SystemEntry:   ptr(re.Generated),
+			//Text:          ptr(re.Text),
+			//Stricken:      ptr(re.Stricken),
+			//HasAttachment: ptr(re.AttachedFile.String != ""),
+			ID:            re.ID,
+			Created:       time.Unix(int64(re.Created), 0),
+			Author:        re.Author,
+			SystemEntry:   re.Generated,
+			Text:          re.Text,
+			Stricken:      re.Stricken,
+			HasAttachment: re.AttachedFile.String != "",
 		})
 	}
 
@@ -156,13 +165,20 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		re := entry.ReportEntry
 		resultEntries = append(resultEntries,
 			imsjson.ReportEntry{
-				ID:            ptr(re.ID),
-				Created:       ptr(time.Unix(int64(re.Created), 0)),
-				Author:        ptr(re.Author),
-				SystemEntry:   ptr(re.Generated),
-				Text:          ptr(re.Text),
-				Stricken:      ptr(re.Stricken),
-				HasAttachment: ptr(re.AttachedFile.String != ""),
+				ID:            re.ID,
+				Created:       time.Unix(int64(re.Created), 0),
+				Author:        re.Author,
+				SystemEntry:   re.Generated,
+				Text:          re.Text,
+				Stricken:      re.Stricken,
+				HasAttachment: re.AttachedFile.String != "",
+				//ID:            ptr(re.ID),
+				//Created:       ptr(time.Unix(int64(re.Created), 0)),
+				//Author:        ptr(re.Author),
+				//SystemEntry:   ptr(re.Generated),
+				//Text:          ptr(re.Text),
+				//Stricken:      ptr(re.Stricken),
+				//HasAttachment: ptr(re.AttachedFile.String != ""),
 			},
 		)
 	}
@@ -202,4 +218,27 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
+}
+
+func addIncidentReportEntry(ctx context.Context, q *imsdb.Queries, eventID, incidentNum int32, author, text string, generated bool) error {
+	reID, err := q.CreateReportEntry(ctx, imsdb.CreateReportEntryParams{
+		Author:       author,
+		Text:         text,
+		Created:      float64(time.Now().Unix()),
+		Generated:    generated,
+		Stricken:     false,
+		AttachedFile: sql.NullString{},
+	})
+	if err != nil {
+		return fmt.Errorf("[CreateReportEntry]: %w", err)
+	}
+	err = q.AttachReportEntryToIncident(ctx, imsdb.AttachReportEntryToIncidentParams{
+		Event:          eventID,
+		IncidentNumber: incidentNum,
+		ReportEntry:    int32(reID),
+	})
+	if err != nil {
+		return fmt.Errorf("[AttachReportEntryToIncident]: %w", err)
+	}
+	return nil
 }

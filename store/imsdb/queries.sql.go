@@ -71,6 +71,25 @@ func (q *Queries) AttachReportEntryToFieldReport(ctx context.Context, arg Attach
 	return err
 }
 
+const attachReportEntryToIncident = `-- name: AttachReportEntryToIncident :exec
+insert into INCIDENT__REPORT_ENTRY (
+    EVENT, INCIDENT_NUMBER, REPORT_ENTRY
+) values (
+    ?, ?, ?
+)
+`
+
+type AttachReportEntryToIncidentParams struct {
+	Event          int32
+	IncidentNumber int32
+	ReportEntry    int32
+}
+
+func (q *Queries) AttachReportEntryToIncident(ctx context.Context, arg AttachReportEntryToIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, attachReportEntryToIncident, arg.Event, arg.IncidentNumber, arg.ReportEntry)
+	return err
+}
+
 const attachedFieldReportNumbers = `-- name: AttachedFieldReportNumbers :many
 select NUMBER from FIELD_REPORT
 where
@@ -881,6 +900,71 @@ func (q *Queries) SchemaVersion(ctx context.Context) (int16, error) {
 	var version int16
 	err := row.Scan(&version)
 	return version, err
+}
+
+const setFieldReportReportEntryStricken = `-- name: SetFieldReportReportEntryStricken :exec
+update REPORT_ENTRY
+set STRICKEN = ?
+where ID IN (
+    select REPORT_ENTRY
+    from FIELD_REPORT__REPORT_ENTRY
+    where EVENT = ?
+      and FIELD_REPORT_NUMBER = ?
+      and REPORT_ENTRY = ?
+)
+`
+
+type SetFieldReportReportEntryStrickenParams struct {
+	Stricken          bool
+	Event             int32
+	FieldReportNumber int32
+	ReportEntry       int32
+}
+
+func (q *Queries) SetFieldReportReportEntryStricken(ctx context.Context, arg SetFieldReportReportEntryStrickenParams) error {
+	_, err := q.db.ExecContext(ctx, setFieldReportReportEntryStricken,
+		arg.Stricken,
+		arg.Event,
+		arg.FieldReportNumber,
+		arg.ReportEntry,
+	)
+	return err
+}
+
+const setIncidentReportEntryStricken = `-- name: SetIncidentReportEntryStricken :exec
+/*
+   The "stricken" queries seem bloated at first blush, because the whole
+   "where ID in (..." could just be "where ID =". What it's doing though is
+   ensuring that the provided eventID and incidentNumber actually align with
+   the reportEntryID in question, and that's important for authorization purposes.
+*/
+
+update REPORT_ENTRY
+set STRICKEN = ?
+where ID IN (
+    select REPORT_ENTRY
+    from INCIDENT__REPORT_ENTRY
+    where EVENT = ?
+        and INCIDENT_NUMBER = ?
+        and REPORT_ENTRY = ?
+)
+`
+
+type SetIncidentReportEntryStrickenParams struct {
+	Stricken       bool
+	Event          int32
+	IncidentNumber int32
+	ReportEntry    int32
+}
+
+func (q *Queries) SetIncidentReportEntryStricken(ctx context.Context, arg SetIncidentReportEntryStrickenParams) error {
+	_, err := q.db.ExecContext(ctx, setIncidentReportEntryStricken,
+		arg.Stricken,
+		arg.Event,
+		arg.IncidentNumber,
+		arg.ReportEntry,
+	)
+	return err
 }
 
 const updateFieldReport = `-- name: UpdateFieldReport :exec

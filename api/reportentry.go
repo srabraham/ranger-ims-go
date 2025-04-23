@@ -1,0 +1,167 @@
+package api
+
+import (
+	"database/sql"
+	"fmt"
+	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store/imsdb"
+	"log"
+	"log/slog"
+	"net/http"
+	"strconv"
+)
+
+type EditFieldReportReportEntry struct {
+	imsDB       *sql.DB
+	eventSource *EventSourcerer
+}
+
+func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	if !ok {
+		return
+	}
+
+	var fieldReportNumber int32
+	if isInt32(req.PathValue("fieldReportNumber")) {
+		fieldReportNumber = toInt32(req.PathValue("fieldReportNumber"))
+	} else {
+		log.Panicf("wanted int32 FRN, got %v", req.PathValue("fieldReportNumber"))
+	}
+	var reportEntryId int32
+	if isInt32(req.PathValue("reportEntryId")) {
+		reportEntryId = toInt32(req.PathValue("reportEntryId"))
+	} else {
+		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
+	}
+
+	re, ok := readBodyAs[imsjson.ReportEntry](w, req)
+	if !ok {
+		return
+	}
+	//
+	//bod, _ := io.ReadAll(req.Body)
+	//defer req.Body.Close()
+	//re := imsjson.ReportEntry{}
+	//_ = json.Unmarshal(bod, &re)
+
+	txn, _ := action.imsDB.Begin()
+	defer txn.Rollback()
+	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+
+	err := dbTX.SetFieldReportReportEntryStricken(ctx, imsdb.SetFieldReportReportEntryStrickenParams{
+		Stricken:          re.Stricken,
+		Event:             event.ID,
+		FieldReportNumber: fieldReportNumber,
+		ReportEntry:       reportEntryId,
+	})
+	if err != nil {
+		slog.Error("Error setting field report entry", "error", err)
+		http.Error(w, "Error setting stricken value", http.StatusInternalServerError)
+		return
+	}
+	struckVerb := "Struck"
+	if !re.Stricken {
+		struckVerb = "Unstruck"
+	}
+	err = addFRReportEntry(ctx, dbTX, event.ID, fieldReportNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
+	if err != nil {
+		slog.Error("Error adding report entry", "error", err)
+		http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+		return
+	}
+	if err = txn.Commit(); err != nil {
+		slog.Error("Failed to commit transaction", "error", err)
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
+	}
+
+	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+
+	action.eventSource.notifyFieldReportUpdate(event.Name, fieldReportNumber)
+}
+
+type EditIncidentReportEntry struct {
+	imsDB       *sql.DB
+	eventSource *EventSourcerer
+}
+
+func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
+	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	if !ok {
+		return
+	}
+
+	var incidentNumber int32
+	if isInt32(req.PathValue("incidentNumber")) {
+		incidentNumber = toInt32(req.PathValue("incidentNumber"))
+	} else {
+		log.Panicf("wanted int32 IN, got %v", req.PathValue("incidentNumber"))
+	}
+	var reportEntryId int32
+	if isInt32(req.PathValue("reportEntryId")) {
+		reportEntryId = toInt32(req.PathValue("reportEntryId"))
+	} else {
+		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
+	}
+
+	re, ok := readBodyAs[imsjson.ReportEntry](w, req)
+	if !ok {
+		return
+	}
+
+	txn, _ := action.imsDB.Begin()
+	defer txn.Rollback()
+	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+
+	err := dbTX.SetIncidentReportEntryStricken(ctx, imsdb.SetIncidentReportEntryStrickenParams{
+		Stricken:       re.Stricken,
+		Event:          event.ID,
+		IncidentNumber: incidentNumber,
+		ReportEntry:    reportEntryId,
+	})
+	if err != nil {
+		slog.Error("Error setting incident report entry", "error", err)
+		http.Error(w, "Error setting stricken value", http.StatusInternalServerError)
+		return
+	}
+	struckVerb := "Struck"
+	if !re.Stricken {
+		struckVerb = "Unstruck"
+	}
+	err = addIncidentReportEntry(ctx, dbTX, event.ID, incidentNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
+	if err != nil {
+		slog.Error("Error adding report entry", "error", err)
+		http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+		return
+	}
+	if err = txn.Commit(); err != nil {
+		slog.Error("Failed to commit transaction", "error", err)
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
+	}
+
+	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+
+	action.eventSource.notifyIncidentUpdate(event.Name, incidentNumber)
+}
+
+func isInt32(s string) bool {
+	_, err := strconv.ParseInt(s, 10, 32)
+	return err == nil
+}
+
+func toInt32(s string) int32 {
+	i, _ := strconv.ParseInt(s, 10, 32)
+	return int32(i)
+}

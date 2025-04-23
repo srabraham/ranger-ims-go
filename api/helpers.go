@@ -29,6 +29,22 @@ func readBody(w http.ResponseWriter, req *http.Request) (bytes []byte, success b
 	return bodyBytes, true
 }
 
+func readBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, success bool) {
+	defer req.Body.Close()
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		slog.Error("Failed to read request body", "error", err)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return t, false
+	}
+	if err = json.Unmarshal(bodyBytes, &t); err != nil {
+		slog.Error("Failed to unmarshal request body", "error", err)
+		http.Error(w, "Failed to unmarshal request body", http.StatusBadRequest)
+		return t, false
+	}
+	return t, true
+}
+
 //func eventFromPathValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event queries.Event, success bool) {
 //	eventName := req.PathValue("eventName")
 //	if eventName == "" {
