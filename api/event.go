@@ -61,7 +61,7 @@ type EditEvents struct {
 	imsAdmins []string
 }
 
-// Require basic cleanliness for EventID, since it's used in IMS URLs
+// Require basic cleanliness for EventName, since it's used in IMS URLs
 // and in filesystem directory paths.
 var allowedEventNames = regexp.MustCompile(`^[\w-]+$`)
 

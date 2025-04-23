@@ -1140,6 +1140,7 @@ function subscribeToUpdates(closed: (_value?: undefined)=>void): void {
 
     eventSource.addEventListener("InitialEvent", function(e: MessageEvent<string>) {
         const previousId = localStorage.getItem(lastSseIDKey);
+        console.log(`Got InitialEvent. Its lastEventId is ${e.lastEventId} and previousId is ${previousId}`);
         if (e.lastEventId === previousId) {
             return;
         }

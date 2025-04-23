@@ -648,7 +648,7 @@ async function sendEdits(edits) {
     else {
         // We're editing an existing incident.
         edits.number = number;
-        url += number;
+        url += `/${number}`;
     }
     const { resp, err } = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify(edits),

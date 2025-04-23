@@ -94,10 +94,10 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				Description:  stringOrNil(r.Incident.LocationDescription),
 				Type:         &garett,
 			},
-			IncidentTypes: ptr(incidentTypes),
-			FieldReports:  ptr(fieldReportNumbers),
-			RangerHandles: ptr(rangerHandles),
-			ReportEntries: ptr(entriesByIncident[r.Incident.Number]),
+			IncidentTypes: incidentTypes,
+			FieldReports:  fieldReportNumbers,
+			RangerHandles: rangerHandles,
+			ReportEntries: entriesByIncident[r.Incident.Number],
 		})
 	}
 
@@ -192,10 +192,10 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Description:  stringOrNil(r.Incident.LocationDescription),
 			Type:         &garett,
 		},
-		IncidentTypes: ptr(incidentTypes),
-		FieldReports:  ptr(fieldReportNumbers),
-		RangerHandles: ptr(rangerHandles),
-		ReportEntries: ptr(resultEntries),
+		IncidentTypes: incidentTypes,
+		FieldReports:  fieldReportNumbers,
+		RangerHandles: rangerHandles,
+		ReportEntries: resultEntries,
 	}
 
 	j, _ := json.Marshal(result)

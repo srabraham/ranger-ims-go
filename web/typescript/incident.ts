@@ -825,7 +825,7 @@ async function sendEdits(edits: ims.Incident): Promise<{err:string|null}> {
     } else {
         // We're editing an existing incident.
         edits.number = number;
-        url += number;
+        url += `/${number}`;
     }
 
     const {resp, err} = await ims.fetchJsonNoThrow(url, {

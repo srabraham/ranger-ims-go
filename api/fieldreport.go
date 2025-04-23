@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/launchdarkly/eventsource"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"io"
@@ -71,7 +73,7 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 			Created:       ptr(time.Unix(int64(fr.Created), 0)),
 			Summary:       stringOrNil(fr.Summary),
 			Incident:      int32OrNil(fr.IncidentNumber),
-			ReportEntries: &entries,
+			ReportEntries: entries,
 		})
 	}
 
@@ -125,7 +127,7 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		Created:       ptr(time.Unix(int64(fr.Created), 0)),
 		Summary:       stringOrNil(fr.Summary),
 		Incident:      int32OrNil(fr.IncidentNumber),
-		ReportEntries: &[]imsjson.ReportEntry{},
+		ReportEntries: []imsjson.ReportEntry{},
 	}
 	entries := make([]imsjson.ReportEntry, 0)
 	for _, rer := range reportEntryRows {
@@ -140,12 +142,13 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			HasAttachment: ptr(re.AttachedFile.String != ""),
 		})
 	}
-	response.ReportEntries = &entries
+	response.ReportEntries = entries
 	writeJSON(w, response)
 }
 
 type EditFieldReport struct {
-	imsDB *sql.DB
+	imsDB       *sql.DB
+	eventSource *eventsource.Server
 }
 
 func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -184,8 +187,70 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		slog.Info("attached FR to incident", "event", event.ID, "incident", incident.Int32, "FR", fieldReportNumber)
 	}
 
-	//defer req.Body.Close()
-	//bod, _ := io.ReadAll(req.Body)
+	bod, _ := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	requestFR := imsjson.FieldReport{}
+	_ = json.Unmarshal(bod, &requestFR)
+
+	slog.Info("unmarshalled", "requestFR", requestFR)
+
+	frr, _ := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
+		Event:  event.ID,
+		Number: int32(fieldReportNumber),
+	})
+
+	storedFR := frr.FieldReport
+
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
+	txn, _ := action.imsDB.Begin()
+	defer txn.Rollback()
+	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+
+	if requestFR.Summary != nil {
+		storedFR.Summary = sqlNullString(requestFR.Summary)
+		text := "Changed summary to: " + *requestFR.Summary
+		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, text, true)
+		if err != nil {
+			slog.Error("Error adding system fr report entry", "error", err)
+			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			return
+		}
+	}
+	_ = dbTX.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
+		Summary:        storedFR.Summary,
+		Event:          storedFR.Event,
+		Number:         storedFR.Number,
+		IncidentNumber: storedFR.IncidentNumber,
+	})
+	for _, entry := range requestFR.ReportEntries {
+		if entry.Text == nil {
+			continue
+		}
+		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, *entry.Text, false)
+		if err != nil {
+			slog.Error("Error adding fr report entry", "error", err)
+			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := txn.Commit(); err != nil {
+		slog.Error("Failed to commit transaction", "error", err)
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
+	}
+
+	http.Error(w, "Success", http.StatusNoContent)
+
+	action.eventSource.Publish([]string{"imsevents"}, IMSEvent{
+		EventID: idCounter.Add(1),
+		EventData: IMSEventData{
+			EventName:         event.Name,
+			FieldReportNumber: storedFR.Number,
+		},
+	})
 
 	//event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
 	//if !ok {
@@ -194,12 +259,9 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 	//slog.Info("in fieldreport", "attach", req.FormValue("action"), "detach", req.FormValue("detach"))
 }
 
-func (action EditFieldReport) attachToIncident(w http.ResponseWriter, req *http.Request) {
-
-}
-
 type NewFieldReport struct {
-	imsDB *sql.DB
+	imsDB       *sql.DB
+	eventSource *eventsource.Server
 }
 
 func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -232,8 +294,9 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
+	dbTX := imsdb.New(action.imsDB).WithTx(txn)
 
-	_ = imsdb.New(action.imsDB).WithTx(txn).CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
+	_ = dbTX.CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
 		Event:          event.ID,
 		Number:         int32(newFrNum),
 		Created:        float64(time.Now().Unix()),
@@ -241,28 +304,68 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		IncidentNumber: sql.NullInt32{},
 	})
 
-	reID, _ := imsdb.New(action.imsDB).WithTx(txn).CreateReportEntry(ctx, imsdb.CreateReportEntryParams{
-		Author:       author,
-		Text:         "Created report with summary " + fmt.Sprint(fr.Summary),
-		Created:      float64(time.Now().Unix()),
-		Generated:    true,
-		Stricken:     false,
-		AttachedFile: sql.NullString{},
-	})
+	for _, entry := range fr.ReportEntries {
+		if entry.Text == nil {
+			continue
+		}
+		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, *entry.Text, false)
+		if err != nil {
+			slog.Error("Error adding system fr report entry", "error", err)
+			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			return
+		}
+	}
 
-	_ = imsdb.New(action.imsDB).WithTx(txn).AttachReportEntryToFieldReport(ctx, imsdb.AttachReportEntryToFieldReportParams{
-		Event:             event.ID,
-		FieldReportNumber: int32(newFrNum),
-		ReportEntry:       int32(reID),
-	})
+	if fr.Summary != nil {
+		text := "Changed summary to: " + *fr.Summary
+		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, text, true)
+		if err != nil {
+			slog.Error("Error adding system fr report entry", "error", err)
+			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	if err := txn.Commit(); err != nil {
-		panic(err)
+		slog.Error("Failed to commit transaction", "error", err)
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("X-IMS-Field-Report-Number", strconv.FormatInt(newFrNum, 10))
 	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/field_reports/"+strconv.FormatInt(newFrNum, 10))
 	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
+
+	action.eventSource.Publish([]string{"imsevents"}, IMSEvent{
+		EventID: idCounter.Add(1),
+		EventData: IMSEventData{
+			EventName:         event.Name,
+			FieldReportNumber: *fr.Number,
+		},
+	})
+}
+
+func addFRReportEntry(ctx context.Context, q *imsdb.Queries, eventID, frNum int32, author, text string, generated bool) error {
+	reID, err := q.CreateReportEntry(ctx, imsdb.CreateReportEntryParams{
+		Author:       author,
+		Text:         text,
+		Created:      float64(time.Now().Unix()),
+		Generated:    generated,
+		Stricken:     false,
+		AttachedFile: sql.NullString{},
+	})
+	if err != nil {
+		return fmt.Errorf("[CreateReportEntry]: %w", err)
+	}
+	err = q.AttachReportEntryToFieldReport(ctx, imsdb.AttachReportEntryToFieldReportParams{
+		Event:             eventID,
+		FieldReportNumber: frNum,
+		ReportEntry:       int32(reID),
+	})
+	if err != nil {
+		return fmt.Errorf("[AttachReportEntryToFieldReport]: %w", err)
+	}
+	return nil
 }
 
 func sqlNullString(s *string) sql.NullString {

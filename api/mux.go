@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"database/sql"
+	"github.com/launchdarkly/eventsource"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
+	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -16,6 +18,11 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 	}
 
 	j := auth.JWTer{SecretKey: cfg.Core.JWTSecret}
+
+	srv := eventsource.NewServer()
+	srv.Register("imsevents", initialEventRepository{})
+	srv.ReplayAll = true
+	srv.Logger = log.Default()
 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
@@ -97,7 +104,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports",
 		Adapt(
-			NewFieldReport{imsDB: db},
+			NewFieldReport{imsDB: db, eventSource: srv},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
@@ -117,7 +124,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
-			EditFieldReport{imsDB: db},
+			EditFieldReport{imsDB: db, eventSource: srv},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
@@ -177,6 +184,13 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.Handle("GET /ims/api/eventsource",
+		Adapt(
+			srv.Handler("imsevents"),
+			LogBeforeAfter(),
+		),
+	)
+
 	mux.HandleFunc("GET /ims/api/ping",
 		func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "ack", http.StatusOK)
@@ -218,7 +232,7 @@ func LogBeforeAfter() Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			next.ServeHTTP(w, r)
-			slog.Info("done serving request", "duration", time.Since(start), "method", r.Method, "path", r.URL.Path)
+			slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }
@@ -228,8 +242,9 @@ type ContextKey string
 const JWTContextKey ContextKey = "JWTContext"
 
 type JWTContext struct {
-	Claims *auth.IMSClaims
-	Error  error
+	Claims            *auth.IMSClaims
+	AuthenticatedUser string
+	Error             error
 }
 
 func ExtractClaimsToContext(j auth.JWTer) Adapter {
@@ -238,8 +253,9 @@ func ExtractClaimsToContext(j auth.JWTer) Adapter {
 			header := r.Header.Get("Authorization")
 			claims, err := j.AuthenticateJWT(header)
 			ctx := context.WithValue(r.Context(), JWTContextKey, JWTContext{
-				Claims: claims,
-				Error:  err,
+				Claims:            claims,
+				AuthenticatedUser: claims.RangerHandle(),
+				Error:             err,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -43,10 +43,13 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	addr := fmt.Sprintf("%v:%v", conf.Cfg.Core.Host, conf.Cfg.Core.Port)
 	s := &http.Server{
-		Addr:           addr,
-		Handler:        mux,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
+		Addr:        addr,
+		Handler:     mux,
+		ReadTimeout: 30 * time.Second,
+		// This needs to be long to support long-lived EventSource calls.
+		// After this duration, a client will be disconnected and forced
+		// to reconnect.
+		WriteTimeout:   30 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 	}
 	log.Printf("I'm listening %v", addr)

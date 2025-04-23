@@ -970,6 +970,7 @@ function subscribeToUpdates(closed) {
     });
     eventSource.addEventListener("InitialEvent", function (e) {
         const previousId = localStorage.getItem(lastSseIDKey);
+        console.log(`Got InitialEvent. Its lastEventId is ${e.lastEventId} and previousId is ${previousId}`);
         if (e.lastEventId === previousId) {
             return;
         }

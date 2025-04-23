@@ -55,7 +55,7 @@ async function initFieldReportPage() {
         const event = e.data.event_id;
         const updateAll = e.data.update_all;
         if (updateAll || (event === ims.pathIds.eventID && number === ims.pathIds.fieldReportNumber)) {
-            console.log("Got field report update: " + number);
+            console.log(`Got field report update. number = ${number}, update_all = ${updateAll}`);
             await loadAndDisplayFieldReport();
         }
     };
@@ -230,7 +230,7 @@ async function frSendEdits(edits) {
     else {
         // We're editing an existing field report.
         edits.number = number;
-        url += number;
+        url += `/${number}`;
     }
     const { resp, err } = await ims.fetchJsonNoThrow(url, {
         body: JSON.stringify(edits),
