@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/auth"
@@ -9,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 )
 
 type GetEvents struct {
@@ -51,6 +53,11 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
+
+	slices.SortFunc(resp, func(a, b imsjson.Event) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
+
 	w.Header().Set("Cache-Control", "max-age=1200, private")
 	writeJSON(w, resp)
 }

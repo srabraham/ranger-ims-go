@@ -210,12 +210,12 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 	}
 	// This is fine, as it may be that only an attach/detach was requested
 	if requestFR.Number == 0 {
-		slog.Info("No field report number provided")
+		slog.Debug("No field report number provided")
 		http.Error(w, "OK", http.StatusNoContent)
 		return
 	}
 
-	slog.Info("unmarshalled", "requestFR", requestFR)
+	//slog.Info("unmarshalled", "requestFR", requestFR)
 
 	frr, _ := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
 		Event:  event.ID,

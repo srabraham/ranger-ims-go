@@ -285,9 +285,9 @@ type Adapter func(http.Handler) http.Handler
 func LogBeforeAfter() Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
+			//start := time.Now()
 			next.ServeHTTP(w, r)
-			slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
+			//slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }
@@ -307,9 +307,13 @@ func ExtractClaimsToContext(j auth.JWTer) Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			claims, err := j.AuthenticateJWT(header)
+			handle := ""
+			if claims != nil {
+				handle = claims.RangerHandle()
+			}
 			ctx := context.WithValue(r.Context(), JWTContextKey, JWTContext{
 				Claims:            claims,
-				AuthenticatedUser: claims.RangerHandle(),
+				AuthenticatedUser: handle,
 				Error:             err,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))

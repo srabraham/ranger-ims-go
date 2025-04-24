@@ -578,7 +578,7 @@ function drawAttachedFieldReports() {
     container.replaceChildren();
     for (const report of reports) {
         const link = document.createElement("a");
-        link.href = ims.urlReplace(url_viewFieldReports) + report.number;
+        link.href = `${ims.urlReplace(url_viewFieldReports)}/${report.number}`;
         link.innerText = ims.fieldReportAsString(report);
         const item = _reportsItem.cloneNode(true);
         item.append(link);

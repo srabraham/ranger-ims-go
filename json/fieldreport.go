@@ -10,6 +10,6 @@ type FieldReport struct {
 	// Summary is nilable, because client can set it to empty, and the server must be able
 	// to distinguish empty from unset.
 	Summary       *string       `json:"summary"`
-	Incident      int32         `json:"incident"`
+	Incident      int32         `json:"incident,omitzero"`
 	ReportEntries []ReportEntry `json:"report_entries"`
 }
