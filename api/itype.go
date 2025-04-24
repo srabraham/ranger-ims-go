@@ -36,7 +36,7 @@ func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reques
 	slices.Sort(response)
 
 	w.Header().Set("Cache-Control", "max-age=1200, private")
-	writeJSON(w, response)
+	mustWriteJSON(w, response)
 }
 
 type EditIncidentTypes struct {

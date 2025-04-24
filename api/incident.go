@@ -96,7 +96,7 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 func formatInt16(i sql.NullInt16) *string {
@@ -215,7 +215,7 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ReportEntries: resultEntries,
 	}
 
-	writeJSON(w, result)
+	mustWriteJSON(w, result)
 }
 
 func fetchIncident(ctx context.Context, imsDB *sql.DB, eventID, incidentNumber int32) (incident imsdb.IncidentRow, reportEntries []imsdb.ReportEntry, err error) {
@@ -515,18 +515,6 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 				}
 			}
 		}
-		//
-		//logs = append(logs, fmt.Sprintf("incident types: %v", newIncident.IncidentTypes))
-		//for _, itype := range *newIncident.IncidentTypes {
-		//	err = dbTX.AttachIncidentTypeToIncident(ctx, imsdb.AttachIncidentTypeToIncidentParams{
-		//		Event:          newIncident.EventID,
-		//		IncidentNumber: newIncident.Number,
-		//		Name:           itype,
-		//	})
-		//	if err != nil {
-		//		return fmt.Errorf("[AttachIncidentTypeToIncident]: %w", err)
-		//	}
-		//}
 	}
 	var updatedFieldReports []int32
 	if newIncident.FieldReports != nil {
@@ -561,18 +549,6 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 				}
 			}
 		}
-
-		//logs = append(logs, fmt.Sprintf("field reports: %v", newIncident.FieldReports))
-		//for _, fr := range *newIncident.FieldReports {
-		//	err = dbTX.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
-		//		Event:          newIncident.EventID,
-		//		IncidentNumber: sql.NullInt32{Int32: newIncident.Number, Valid: true},
-		//		Number:         fr,
-		//	})
-		//	if err != nil {
-		//		return fmt.Errorf("[AttachFieldReportToIncident]: %w", err)
-		//	}
-		//}
 	}
 
 	if len(logs) > 0 {

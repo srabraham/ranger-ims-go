@@ -74,7 +74,7 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 		})
 	}
 
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 type GetFieldReport struct {
@@ -147,7 +147,7 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		})
 	}
 	response.ReportEntries = entries
-	writeJSON(w, response)
+	mustWriteJSON(w, response)
 }
 
 type EditFieldReport struct {

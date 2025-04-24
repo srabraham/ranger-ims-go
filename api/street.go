@@ -22,7 +22,7 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	eventName := req.Form.Get("event_id")
 	var events []imsdb.Event
 	if eventName != "" {
-		event, ok := eventFromFormValue(w, req, action.imsDB)
+		event, ok := mustEventFromFormValue(w, req, action.imsDB)
 		if !ok {
 			return
 		}
@@ -52,7 +52,7 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	w.Header().Set("Cache-Control", "max-age=1200, private")
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 type EditStreets struct {

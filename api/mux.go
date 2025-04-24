@@ -285,9 +285,9 @@ type Adapter func(http.Handler) http.Handler
 func LogBeforeAfter() Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			//start := time.Now()
+			start := time.Now()
 			next.ServeHTTP(w, r)
-			//slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
+			slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }
@@ -356,8 +356,18 @@ func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []s
 					http.StatusInternalServerError)
 				return
 			}
+
+			var eventID int32
+			if r.PathValue("eventName") != "" {
+				event, ok := mustGetEvent(w, r, r.PathValue("eventName"), imsDB)
+				if !ok {
+					return
+				}
+				eventID = event.ID
+			}
+
 			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
-			permissions, err := auth.UserPermissions2(r.Context(), r.PathValue("eventName"), imsDB, imsAdmins, *jwtCtx.Claims)
+			permissions, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
 			if err != nil {
 				slog.Error("Failed to compute permissions", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)

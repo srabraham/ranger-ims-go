@@ -106,7 +106,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, action.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 type GetAuth struct {
@@ -136,7 +136,7 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
 	if !found || jwtCtx.Error != nil || jwtCtx.Claims == nil {
 		resp.Authenticated = false
-		writeJSON(w, resp)
+		mustWriteJSON(w, resp)
 		return
 	}
 	claims := jwtCtx.Claims
@@ -157,7 +157,12 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
 
-		permissions, err := auth.UserPermissions2(req.Context(), eventName, action.imsDB, action.admins, *claims)
+		event, ok := mustEventFromFormValue(w, req, action.imsDB)
+		if !ok {
+			return
+		}
+
+		permissions, err := auth.UserPermissions2(req.Context(), event.ID, action.imsDB, action.admins, *claims)
 		if err != nil {
 			slog.Error("Failed to compute permissions", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -174,5 +179,5 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }

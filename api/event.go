@@ -3,7 +3,6 @@ package api
 import (
 	"cmp"
 	"database/sql"
-	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
@@ -11,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"time"
 )
 
 type GetEvents struct {
@@ -22,21 +22,22 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 	ctx := req.Context()
 
+	start := time.Now()
 	eventRows, err := imsdb.New(action.imsDB).Events(ctx)
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	// TODO: need to apply authorization per event
+	slog.Info("querying events took", "duration", time.Since(start))
 
 	claims := ctx.Value(JWTContextKey).(JWTContext).Claims
 
+	start = time.Now()
 	for _, er := range eventRows {
 		perms, err := auth.UserPermissions2(
 			ctx,
-			er.Event.Name,
+			er.Event.ID,
 			action.imsDB,
 			action.imsAdmins,
 			*claims,
@@ -53,13 +54,14 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
+	slog.Info("computing permissions took", "duration", time.Since(start))
 
 	slices.SortFunc(resp, func(a, b imsjson.Event) int {
 		return cmp.Compare(a.ID, b.ID)
 	})
 
 	w.Header().Set("Cache-Control", "max-age=1200, private")
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 type EditEvents struct {
@@ -76,14 +78,9 @@ func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if ok := mustParseForm(w, req); !ok {
 		return
 	}
-	bodyBytes, ok := readBody(w, req)
+
+	editRequest, ok := mustReadBodyAs[imsjson.EditEventsRequest](w, req)
 	if !ok {
-		return
-	}
-	var editRequest imsjson.EditEventsRequest
-	if err := json.Unmarshal(bodyBytes, &editRequest); err != nil {
-		slog.Error("Failed to parse body", "error", err)
-		http.Error(w, "Failed to parse body", http.StatusBadRequest)
 		return
 	}
 

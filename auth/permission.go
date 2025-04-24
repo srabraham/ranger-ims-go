@@ -80,18 +80,14 @@ var RolesToPerms = map[Role]map[Permission]bool{
 
 func UserPermissions2(
 	ctx context.Context,
-	eventName string, // or "" for no event
+	eventID int32, // or 0 for no event
 	imsDB *sql.DB,
 	imsAdmins []string,
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
 	var eventAccesses []imsdb.EventAccess
-	if eventName != "" {
-		eventRow, err := imsdb.New(imsDB).QueryEventID(ctx, eventName)
-		if err != nil {
-			return nil, fmt.Errorf("QueryEventID: %w", err)
-		}
-		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventRow.Event.ID)
+	if eventID != 0 {
+		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventID)
 		if err != nil {
 			return nil, fmt.Errorf("EventAccess: %w", err)
 		}

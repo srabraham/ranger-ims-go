@@ -18,17 +18,6 @@ func mustParseForm(w http.ResponseWriter, req *http.Request) (success bool) {
 	return true
 }
 
-func readBody(w http.ResponseWriter, req *http.Request) (bytes []byte, success bool) {
-	defer req.Body.Close()
-	bodyBytes, err := io.ReadAll(req.Body)
-	if err != nil {
-		slog.Error("Failed to read request body", "error", err)
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return nil, false
-	}
-	return bodyBytes, true
-}
-
 func mustReadBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, success bool) {
 	defer req.Body.Close()
 	bodyBytes, err := io.ReadAll(req.Body)
@@ -61,7 +50,7 @@ func mustReadBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, succe
 //	return eventRow.Event, true
 //}
 
-func eventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event imsdb.Event, success bool) {
+func mustEventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event imsdb.Event, success bool) {
 	if ok := mustParseForm(w, req); !ok {
 		return imsdb.Event{}, false
 	}
@@ -95,7 +84,7 @@ func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, im
 	return eventRow.Event, true
 }
 
-func writeJSON(w http.ResponseWriter, resp any) (success bool) {
+func mustWriteJSON(w http.ResponseWriter, resp any) (success bool) {
 	marshalled, err := json.Marshal(resp)
 	if err != nil {
 		slog.Error("Failed to marshal JSON", "error", err)

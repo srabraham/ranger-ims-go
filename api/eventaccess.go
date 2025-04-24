@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
@@ -27,30 +26,22 @@ func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Reques
 		http.Error(w, "Failed to get events access", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, resp)
+	mustWriteJSON(w, resp)
 }
 
 func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
-	var events []imsdb.Event
-	//if eventName != "" {
-	//	eventRow, err := imsdb.New(imsDB).QueryEventID(ctx, eventName)
-	//	if err != nil {
-	//		return nil, fmt.Errorf("[QueryEventID]: %w", err)
-	//	}
-	//	events = append(events, eventRow.Event)
-	//} else {
+	result := make(imsjson.EventsAccess)
+
 	allEventRows, err := imsdb.New(imsDB).Events(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("[Events]: %w", err)
 	}
+	var storedEvents []imsdb.Event
 	for _, aer := range allEventRows {
-		events = append(events, aer.Event)
+		storedEvents = append(storedEvents, aer.Event)
 	}
-	//}
 
-	result := make(imsjson.EventsAccess)
-
-	for _, e := range events {
+	for _, e := range storedEvents {
 		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, e.ID)
 		if err != nil {
 			return nil, fmt.Errorf("[EventAccess]: %w", err)
@@ -84,21 +75,13 @@ type PostEventAccess struct {
 var eventAccessWriteMu sync.Mutex
 
 func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	eventAccessWriteMu.Lock()
-	defer eventAccessWriteMu.Unlock()
-
 	ctx := req.Context()
+	// TODO: is this needed? Where else might it not be needed? I don't see a Form read here
 	if ok := mustParseForm(w, req); !ok {
 		return
 	}
-	bodyBytes, ok := readBody(w, req)
+	eventsAccess, ok := mustReadBodyAs[imsjson.EventsAccess](w, req)
 	if !ok {
-		return
-	}
-	var eventsAccess imsjson.EventsAccess
-	if err := json.Unmarshal(bodyBytes, &eventsAccess); err != nil {
-		slog.Error("PostEventAccess failed to parse body", "error", err)
-		http.Error(w, "Failed to parse body", http.StatusBadRequest)
 		return
 	}
 	var errs []error
@@ -123,6 +106,10 @@ func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Ev
 	if len(rules) == 0 {
 		return nil
 	}
+
+	eventAccessWriteMu.Lock()
+	defer eventAccessWriteMu.Unlock()
+
 	txn, err := action.imsDB.BeginTx(ctx, nil)
 	defer txn.Rollback()
 	if err != nil {
