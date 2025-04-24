@@ -20,12 +20,12 @@ type GetIncidents struct {
 }
 
 func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if !parseForm(w, req) {
+	if !mustParseForm(w, req) {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -81,12 +81,12 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Priority:     r.Incident.Priority,
 			Summary:      stringOrNil(r.Incident.Summary),
 			Location: imsjson.Location{
-				Name:         stringOrNil(r.Incident.LocationName),
-				Concentric:   stringOrNil(r.Incident.LocationConcentric),
-				RadialHour:   int16OrNil(r.Incident.LocationRadialHour),
-				RadialMinute: int16OrNil(r.Incident.LocationRadialMinute),
-				Description:  stringOrNil(r.Incident.LocationDescription),
-				Type:         &garett,
+				Name:         ptr(r.Incident.LocationName.String),
+				Concentric:   ptr(r.Incident.LocationConcentric.String),
+				RadialHour:   formatInt16(r.Incident.LocationRadialHour),
+				RadialMinute: formatInt16(r.Incident.LocationRadialMinute),
+				Description:  ptr(r.Incident.LocationDescription.String),
+				Type:         garett,
 			},
 			IncidentTypes: incidentTypes,
 			FieldReports:  fieldReportNumbers,
@@ -98,13 +98,35 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, resp)
 }
 
+func formatInt16(i sql.NullInt16) *string {
+	if i.Valid {
+		result := strconv.FormatInt(int64(i.Int16), 10)
+		return &result
+	}
+	return nil
+}
+
+func parseInt16(s *string) sql.NullInt16 {
+	if s == nil {
+		return sql.NullInt16{}
+	}
+	parsed, err := strconv.ParseInt(*s, 10, 16)
+	if err != nil {
+		return sql.NullInt16{}
+	}
+	return sql.NullInt16{
+		Int16: int16(parsed),
+		Valid: true,
+	}
+}
+
 type GetIncident struct {
 	imsDB *sql.DB
 }
 
 func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -173,12 +195,12 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Priority:     r.Incident.Priority,
 		Summary:      stringOrNil(r.Incident.Summary),
 		Location: imsjson.Location{
-			Name:         stringOrNil(r.Incident.LocationName),
-			Concentric:   stringOrNil(r.Incident.LocationConcentric),
-			RadialHour:   int16OrNil(r.Incident.LocationRadialHour),
-			RadialMinute: int16OrNil(r.Incident.LocationRadialMinute),
-			Description:  stringOrNil(r.Incident.LocationDescription),
-			Type:         &garett,
+			Name:         ptr(r.Incident.LocationName.String),
+			Concentric:   ptr(r.Incident.LocationConcentric.String),
+			RadialHour:   formatInt16(r.Incident.LocationRadialHour),
+			RadialMinute: formatInt16(r.Incident.LocationRadialMinute),
+			Description:  ptr(r.Incident.LocationDescription.String),
+			Type:         garett,
 		},
 		IncidentTypes: incidentTypes,
 		FieldReports:  fieldReportNumbers,
@@ -219,11 +241,11 @@ type NewIncident struct {
 
 func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
-	newIncident, ok := readBodyAs[imsjson.Incident](w, req)
+	newIncident, ok := mustReadBodyAs[imsjson.Incident](w, req)
 	if !ok {
 		return
 	}
@@ -231,74 +253,119 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
 
+	// First create the incident, to lock in the incident number reservation
 	numUntyped, _ := imsdb.New(action.imsDB).MaxIncidentNumber(ctx, event.ID)
-	newIncidentNum := numUntyped.(int64) + 1
+	newIncident.EventID = event.ID
+	newIncident.Number = int32(numUntyped.(int64)) + 1
 
-	txn, _ := action.imsDB.Begin()
-	defer txn.Rollback()
-	dbTX := imsdb.New(action.imsDB).WithTx(txn)
-
-	createIncident := imsdb.CreateIncidentParams{
-		Event:    event.ID,
-		Number:   int32(newIncidentNum),
+	createTheIncident := imsdb.CreateIncidentParams{
+		Event:    newIncident.EventID,
+		Number:   newIncident.Number,
 		Created:  float64(time.Now().Unix()),
 		Priority: imsjson.IncidentPriorityNormal,
 		State:    imsdb.IncidentStateNew,
 	}
+	code, err := imsdb.New(action.imsDB).CreateIncident(ctx, createTheIncident)
+	slog.Info("in newincident got", "code", code, "err", err)
+	if err != nil {
+		slog.Error("error creating incident", "err", err)
+		http.Error(w, "Failed to create incident", http.StatusInternalServerError)
+		return
+	}
+
+	if err = updateIncident(ctx, action.imsDB, newIncident, author); err != nil {
+		slog.Error("error updating incident", "err", err)
+		http.Error(w, "Failed to update incident", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("X-IMS-Incident-Number", fmt.Sprint(newIncident.Number))
+	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/incidents/"+fmt.Sprint(newIncident.Number))
+	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
+
+	action.es.notifyIncidentUpdate(event.Name, newIncident.Number)
+	for _, fr := range newIncident.FieldReports {
+		action.es.notifyFieldReportUpdate(event.Name, fr)
+	}
+}
+
+func updateIncident(ctx context.Context, imsDB *sql.DB, newIncident imsjson.Incident, author string) error {
+	storedIncidentRow, err := imsdb.New(imsDB).Incident(ctx, imsdb.IncidentParams{
+		Event:  newIncident.EventID,
+		Number: newIncident.Number,
+	})
+	if err != nil {
+		panic(err)
+	}
+	storedIncident := storedIncidentRow.Incident
+
+	txn, _ := imsDB.Begin()
+	defer txn.Rollback()
+	dbTX := imsdb.New(imsDB).WithTx(txn)
+
+	update := imsdb.UpdateIncidentParams{
+		Event:                storedIncident.Event,
+		Number:               storedIncident.Number,
+		Created:              storedIncident.Created,
+		Priority:             storedIncident.Priority,
+		State:                storedIncident.State,
+		Summary:              storedIncident.Summary,
+		LocationName:         storedIncident.LocationName,
+		LocationConcentric:   storedIncident.LocationConcentric,
+		LocationRadialHour:   storedIncident.LocationRadialHour,
+		LocationRadialMinute: storedIncident.LocationRadialMinute,
+		LocationDescription:  storedIncident.LocationDescription,
+	}
 
 	var logs []string
 
-	if newIncident.Priority != 0 && newIncident.Priority != imsjson.IncidentPriorityNormal {
-		createIncident.Priority = newIncident.Priority
-		logs = append(logs, fmt.Sprintf("priority: %v", newIncident.Priority))
+	if newIncident.Priority != 0 {
+		update.Priority = newIncident.Priority
+		logs = append(logs, fmt.Sprintf("priority: %v", update.Priority))
 	}
-	if newIncident.State != "" && newIncident.State != string(imsdb.IncidentStateNew) {
-		createIncident.State = imsdb.IncidentState(newIncident.State)
-		logs = append(logs, fmt.Sprintf("state: %v", newIncident.State))
+	if imsdb.IncidentState(newIncident.State).Valid() {
+		update.State = imsdb.IncidentState(newIncident.State)
+		logs = append(logs, fmt.Sprintf("state: %v", update.State))
 	}
 	if newIncident.Summary != nil {
-		createIncident.Summary = sqlNullString(newIncident.Summary)
-		logs = append(logs, fmt.Sprintf("summary: %v", *newIncident.Summary))
+		update.Summary = sqlNullString(newIncident.Summary)
+		logs = append(logs, fmt.Sprintf("summary: %v", update.Summary.String))
 	}
 	if newIncident.Location.Name != nil {
-		createIncident.LocationName = sqlNullString(newIncident.Location.Name)
-		logs = append(logs, fmt.Sprintf("location name: %v", *newIncident.Location.Name))
+		update.LocationName = sqlNullString(newIncident.Location.Name)
+		logs = append(logs, fmt.Sprintf("location name: %v", update.LocationName.String))
 	}
 	if newIncident.Location.Concentric != nil {
-		createIncident.LocationConcentric = sqlNullString(newIncident.Location.Concentric)
-		logs = append(logs, fmt.Sprintf("location concentric: %v", *newIncident.Location.Concentric))
+		update.LocationConcentric = sqlNullString(newIncident.Location.Concentric)
+		logs = append(logs, fmt.Sprintf("location concentric: %v", update.LocationConcentric.String))
 	}
 	if newIncident.Location.RadialHour != nil {
-		createIncident.LocationRadialHour = sql.NullInt16{Int16: *newIncident.Location.RadialHour, Valid: true}
-		logs = append(logs, fmt.Sprintf("location radial hour: %v", *newIncident.Location.RadialHour))
+		update.LocationRadialHour = parseInt16(newIncident.Location.RadialHour)
+		logs = append(logs, fmt.Sprintf("location radial hour: %v", update.LocationRadialHour.Int16))
 	}
 	if newIncident.Location.RadialMinute != nil {
-		createIncident.LocationRadialMinute = sql.NullInt16{Int16: *newIncident.Location.RadialMinute, Valid: true}
-		logs = append(logs, fmt.Sprintf("location radial minute: %v", *newIncident.Location.RadialMinute))
+		update.LocationRadialMinute = parseInt16(newIncident.Location.RadialMinute)
+		logs = append(logs, fmt.Sprintf("location radial minute: %v", update.LocationRadialMinute.Int16))
 	}
 	if newIncident.Location.Description != nil {
-		createIncident.LocationDescription = sqlNullString(newIncident.Location.Description)
-		logs = append(logs, fmt.Sprintf("location description: %v", *newIncident.Location.Description))
+		update.LocationDescription = sqlNullString(newIncident.Location.Description)
+		logs = append(logs, fmt.Sprintf("location description: %v", update.LocationDescription.String))
 	}
-	_, err := dbTX.CreateIncident(ctx, createIncident)
+	err = dbTX.UpdateIncident(ctx, update)
 	if err != nil {
-		slog.Error("Failed to create incident", "error", err)
-		http.Error(w, "Failed to create incident", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("[UpdateIncident]: %w", err)
 	}
 
 	if len(newIncident.RangerHandles) > 0 {
 		logs = append(logs, fmt.Sprintf("Rangers: %v", newIncident.RangerHandles))
 		for _, rh := range newIncident.RangerHandles {
 			err = dbTX.AttachRangerHandleToIncident(ctx, imsdb.AttachRangerHandleToIncidentParams{
-				Event:          event.ID,
-				IncidentNumber: int32(newIncidentNum),
+				Event:          newIncident.EventID,
+				IncidentNumber: newIncident.Number,
 				RangerHandle:   rh,
 			})
 			if err != nil {
-				slog.Error("Error adding incident Rangers", "error", err)
-				http.Error(w, "Error adding incident Rangers", http.StatusInternalServerError)
-				return
+				return fmt.Errorf("[AttachRangerHandleToIncident]: %w", err)
 			}
 		}
 	}
@@ -307,14 +374,12 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		logs = append(logs, fmt.Sprintf("incident types: %v", newIncident.IncidentTypes))
 		for _, itype := range newIncident.IncidentTypes {
 			err = dbTX.AttachIncidentTypeToIncident(ctx, imsdb.AttachIncidentTypeToIncidentParams{
-				Event:          event.ID,
-				IncidentNumber: int32(newIncidentNum),
+				Event:          newIncident.EventID,
+				IncidentNumber: newIncident.Number,
 				Name:           itype,
 			})
 			if err != nil {
-				slog.Error("Error attaching incident type", "error", err)
-				http.Error(w, "Error attaching incident type", http.StatusInternalServerError)
-				return
+				return fmt.Errorf("[AttachIncidentTypeToIncident]: %w", err)
 			}
 		}
 	}
@@ -323,24 +388,20 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		logs = append(logs, fmt.Sprintf("field reports: %v", newIncident.FieldReports))
 		for _, fr := range newIncident.FieldReports {
 			err = dbTX.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
-				Event:          event.ID,
-				IncidentNumber: sql.NullInt32{Int32: int32(newIncidentNum), Valid: true},
+				Event:          newIncident.EventID,
+				IncidentNumber: sql.NullInt32{Int32: int32(newIncident.Number), Valid: true},
 				Number:         fr,
 			})
 			if err != nil {
-				slog.Error("Error attaching field report", "error", err)
-				http.Error(w, "Error attaching field report", http.StatusInternalServerError)
-				return
+				return fmt.Errorf("[AttachFieldReportToIncident]: %w", err)
 			}
 		}
 	}
 
 	if len(logs) > 0 {
-		err = addIncidentReportEntry(ctx, dbTX, event.ID, int32(newIncidentNum), author, fmt.Sprintf("Changed %v", strings.Join(logs, ", ")), true)
+		err = addIncidentReportEntry(ctx, dbTX, newIncident.EventID, newIncident.Number, author, fmt.Sprintf("Changed %v", strings.Join(logs, ", ")), true)
 		if err != nil {
-			slog.Error("Error adding incident ReportEntry", "error", err)
-			http.Error(w, "Error adding incident ReportEntry", http.StatusInternalServerError)
-			return
+			return fmt.Errorf("[addIncidentReportEntry]: %w", err)
 		}
 	}
 
@@ -348,28 +409,16 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if entry.Text == "" {
 			continue
 		}
-		err = addIncidentReportEntry(ctx, dbTX, event.ID, int32(newIncidentNum), author, entry.Text, false)
+		err = addIncidentReportEntry(ctx, dbTX, newIncident.EventID, newIncident.Number, author, entry.Text, false)
 		if err != nil {
-			slog.Error("Error adding incident ReportEntry", "error", err)
-			http.Error(w, "Error adding incident ReportEntry", http.StatusInternalServerError)
-			return
+			return fmt.Errorf("[addIncidentReportEntry]: %w", err)
 		}
 	}
 
 	if err = txn.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("[Commit]: %w", err)
 	}
-
-	w.Header().Set("X-IMS-Incident-Number", strconv.FormatInt(newIncidentNum, 10))
-	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/incidents/"+strconv.FormatInt(newIncidentNum, 10))
-	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
-
-	action.es.notifyIncidentUpdate(event.Name, int32(newIncidentNum))
-	for _, fr := range newIncident.FieldReports {
-		action.es.notifyFieldReportUpdate(event.Name, fr)
-	}
+	return nil
 }
 
 type EditIncident struct {
@@ -378,46 +427,68 @@ type EditIncident struct {
 }
 
 func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	_ = req.Context()
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	ctx := req.Context()
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
-
 	incidentNumber, err := strconv.ParseInt(req.PathValue("incidentNumber"), 10, 32)
 	if err != nil {
 		slog.Error("Got nonnumeric incident number", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	newIncident, ok := mustReadBodyAs[imsjson.Incident](w, req)
+	if !ok {
+		return
+	}
+	newIncident.EventID = event.ID
+	newIncident.Number = int32(incidentNumber)
 
-	r, err := imsdb.New(action.imsDB).Incident(req.Context(), imsdb.IncidentParams{
-		Event:  event.ID,
-		Number: int32(incidentNumber),
-	})
-	if err != nil {
-		slog.Error("Failed to read incident", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
+	author := jwtCtx.Claims.RangerHandle()
+
+	//r, err := imsdb.New(action.imsDB).Incident(req.Context(), imsdb.IncidentParams{
+	//	Event:  event.ID,
+	//	Number: int32(incidentNumber),
+	//})
+	//if err != nil {
+	//	slog.Error("Failed to read incident", "error", err)
+	//	w.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
+	//
+	//var incidentTypes imsjson.IncidentTypes
+	//var rangerHandles []string
+	//var fieldReportNumbers []int32
+	//json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
+	//json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
+	//json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
+
+	if err = updateIncident(ctx, action.imsDB, newIncident, author); err != nil {
+		slog.Error("error updating incident", "err", err)
+		http.Error(w, "Failed to update incident", http.StatusInternalServerError)
 		return
 	}
 
-	var incidentTypes imsjson.IncidentTypes
-	var rangerHandles []string
-	var fieldReportNumbers []int32
-	json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
-	json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
-	json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
+	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+
+	action.es.notifyIncidentUpdate(event.Name, newIncident.Number)
+	// TODO: need to update detached FRs too
+	for _, fr := range newIncident.FieldReports {
+		action.es.notifyFieldReportUpdate(event.Name, fr)
+	}
 
 	// TODO: much stuff...try not to repeat a ton of code from the "new" action
 	return
 
 	//	ctx := req.Context()
-	//	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	//	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	//	if !ok {
 	//		return
 	//	}
 	//
-	//	newIncident, ok := readBodyAs[imsjson.Incident](w, req)
+	//	newIncident, ok := mustReadBodyAs[imsjson.Incident](w, req)
 	//	if !ok {
 	//		return
 	//	}

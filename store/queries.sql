@@ -33,17 +33,51 @@ insert into INCIDENT (
     NUMBER,
     CREATED,
     PRIORITY,
-    STATE,
-    SUMMARY,
-    LOCATION_NAME,
-    LOCATION_CONCENTRIC,
-    LOCATION_RADIAL_HOUR,
-    LOCATION_RADIAL_MINUTE,
-    LOCATION_DESCRIPTION
+    STATE
+--     SUMMARY,
+--     LOCATION_NAME,
+--     LOCATION_CONCENTRIC,
+--     LOCATION_RADIAL_HOUR,
+--     LOCATION_RADIAL_MINUTE,
+--     LOCATION_DESCRIPTION
 )
 values (
-   ?,?,?,?,?,?,?,?,?,?,?
+   ?,?,?,?,?
 );
+
+-- name: UpdateIncident :exec
+update INCIDENT set
+    CREATED = ?,
+    PRIORITY = ?,
+    STATE = ?,
+    SUMMARY = ?,
+    LOCATION_NAME = ?,
+    LOCATION_CONCENTRIC = ?,
+    LOCATION_RADIAL_HOUR = ?,
+    LOCATION_RADIAL_MINUTE = ?,
+    LOCATION_DESCRIPTION = ?
+where
+    EVENT = ?
+    and NUMBER = ?
+;
+--
+-- -- name: UpdateIncident :exec
+-- UPDATE INCIDENT (
+--     EVENT,
+--     NUMBER,
+--     CREATED,
+--     PRIORITY,
+--     STATE,
+--     SUMMARY,
+--     LOCATION_NAME,
+--     LOCATION_CONCENTRIC,
+--     LOCATION_RADIAL_HOUR,
+--     LOCATION_RADIAL_MINUTE,
+--     LOCATION_DESCRIPTION
+-- )
+-- values (
+--            ?,?,?,?,?,?,?,?,?,?,?
+--        );
 
 -- name: Incident :one
 select

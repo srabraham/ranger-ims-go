@@ -924,7 +924,7 @@ async function editLocationAddressRadialMinute(): Promise<void> {
 
 async function editLocationAddressConcentric(): Promise<void> {
     const concentricInput = document.getElementById("incident_location_address_concentric") as HTMLSelectElement;
-    await ims.editFromElement(concentricInput, "location.concentric", transformAddressInteger);
+    await ims.editFromElement(concentricInput, "location.concentric");
 }
 
 

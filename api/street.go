@@ -16,7 +16,7 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// eventName --> street ID --> street name
 	resp := make(imsjson.EventsStreets)
 
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	eventName := req.Form.Get("event_id")
@@ -61,12 +61,12 @@ type EditStreets struct {
 
 func (action EditStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	eventsStreets, ok := readBodyAs[imsjson.EventsStreets](w, req)
+	eventsStreets, ok := mustReadBodyAs[imsjson.EventsStreets](w, req)
 	if !ok {
 		return
 	}
 	for eventName, newEventStreets := range eventsStreets {
-		event, ok := eventFromName(w, req, eventName, action.imsDB)
+		event, ok := mustGetEvent(w, req, eventName, action.imsDB)
 		if !ok {
 			return
 		}

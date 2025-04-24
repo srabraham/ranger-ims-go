@@ -3,11 +3,9 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -23,12 +21,12 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 	resp := make(imsjson.FieldReports, 0)
 	ctx := req.Context()
 
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -67,11 +65,11 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 		fr := r.FieldReport
 		entries := entriesByFR[fr.Number]
 		resp = append(resp, imsjson.FieldReport{
-			Event:         ptr(event.Name),
-			Number:        ptr(fr.Number),
-			Created:       ptr(time.Unix(int64(fr.Created), 0)),
+			Event:         event.Name,
+			Number:        fr.Number,
+			Created:       time.Unix(int64(fr.Created), 0),
 			Summary:       stringOrNil(fr.Summary),
-			Incident:      int32OrNil(fr.IncidentNumber),
+			Incident:      fr.IncidentNumber.Int32,
 			ReportEntries: entries,
 		})
 	}
@@ -87,7 +85,7 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	response := imsjson.FieldReport{}
 	ctx := req.Context()
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -121,11 +119,11 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	fr := frRow.FieldReport
 
 	response = imsjson.FieldReport{
-		Event:         ptr(event.Name),
-		Number:        ptr(fr.Number),
-		Created:       ptr(time.Unix(int64(fr.Created), 0)),
+		Event:         event.Name,
+		Number:        fr.Number,
+		Created:       time.Unix(int64(fr.Created), 0),
 		Summary:       stringOrNil(fr.Summary),
-		Incident:      int32OrNil(fr.IncidentNumber),
+		Incident:      fr.IncidentNumber.Int32,
 		ReportEntries: []imsjson.ReportEntry{},
 	}
 	entries := make([]imsjson.ReportEntry, 0)
@@ -159,11 +157,11 @@ type EditFieldReport struct {
 
 func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -206,10 +204,16 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		slog.Info("attached FR to incident", "event", event.ID, "incident", incident.Int32, "FR", fieldReportNumber)
 	}
 
-	bod, _ := io.ReadAll(req.Body)
-	defer req.Body.Close()
-	requestFR := imsjson.FieldReport{}
-	_ = json.Unmarshal(bod, &requestFR)
+	requestFR, ok := mustReadBodyAs[imsjson.FieldReport](w, req)
+	if !ok {
+		return
+	}
+	// This is fine, as it may be that only an attach/detach was requested
+	if requestFR.Number == 0 {
+		slog.Info("No field report number provided")
+		http.Error(w, "OK", http.StatusNoContent)
+		return
+	}
 
 	slog.Info("unmarshalled", "requestFR", requestFR)
 
@@ -235,9 +239,9 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		}
 	}
 	_ = dbTX.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
-		Summary:        storedFR.Summary,
 		Event:          storedFR.Event,
 		Number:         storedFR.Number,
+		Summary:        storedFR.Summary,
 		IncidentNumber: storedFR.IncidentNumber,
 	})
 	for _, entry := range requestFR.ReportEntries {
@@ -261,12 +265,6 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 	http.Error(w, "Success", http.StatusNoContent)
 
 	action.eventSource.notifyFieldReportUpdate(event.Name, storedFR.Number)
-
-	//event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
-	//if !ok {
-	//	return
-	//}
-	//slog.Info("in fieldreport", "attach", req.FormValue("action"), "detach", req.FormValue("detach"))
 }
 
 type NewFieldReport struct {
@@ -276,21 +274,16 @@ type NewFieldReport struct {
 
 func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	//if ok := parseForm(w, req); !ok {
-	//	return
-	//}
-
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	if !ok {
+		return
+	}
+	fr, ok := mustReadBodyAs[imsjson.FieldReport](w, req)
 	if !ok {
 		return
 	}
 
-	fr, ok := readBodyAs[imsjson.FieldReport](w, req)
-	if !ok {
-		return
-	}
-
-	if fr.Incident != nil {
+	if fr.Incident != 0 {
 		slog.Error("New FR may not be attached to an incident", "incident", fr.Incident)
 		http.Error(w, "New FR may not be attached to an incident", http.StatusBadRequest)
 		return
@@ -373,7 +366,7 @@ func addFRReportEntry(ctx context.Context, q *imsdb.Queries, eventID, frNum int3
 }
 
 func sqlNullString(s *string) sql.NullString {
-	if s == nil {
+	if s == nil || *s == "" {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: *s, Valid: true}

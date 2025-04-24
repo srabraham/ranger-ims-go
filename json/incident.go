@@ -7,12 +7,15 @@ import (
 type Incidents []Incident
 
 type Location struct {
+	// Various fields here are nilable, because client can set them empty, and the server must be able
+	// to distinguish empty from unset.
+
 	Name         *string `json:"name"`
 	Concentric   *string `json:"concentric"`
-	RadialHour   *int16  `json:"radial_hour"`
-	RadialMinute *int16  `json:"radial_minute"`
+	RadialHour   *string `json:"radial_hour"`
+	RadialMinute *string `json:"radial_minute"`
 	Description  *string `json:"description"`
-	Type         *string `json:"type"`
+	Type         string  `json:"type"`
 }
 
 const (
@@ -23,6 +26,7 @@ const (
 
 type Incident struct {
 	Event         string        `json:"event"`
+	EventID       int32         `json:"event_id"`
 	Number        int32         `json:"number"`
 	Created       time.Time     `json:"created,omitzero"`
 	LastModified  time.Time     `json:"last_modified,omitzero"`

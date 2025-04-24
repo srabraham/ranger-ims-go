@@ -283,33 +283,27 @@ insert into INCIDENT (
     NUMBER,
     CREATED,
     PRIORITY,
-    STATE,
-    SUMMARY,
-    LOCATION_NAME,
-    LOCATION_CONCENTRIC,
-    LOCATION_RADIAL_HOUR,
-    LOCATION_RADIAL_MINUTE,
-    LOCATION_DESCRIPTION
+    STATE
 )
 values (
-   ?,?,?,?,?,?,?,?,?,?,?
+   ?,?,?,?,?
 )
 `
 
 type CreateIncidentParams struct {
-	Event                int32
-	Number               int32
-	Created              float64
-	Priority             int8
-	State                IncidentState
-	Summary              sql.NullString
-	LocationName         sql.NullString
-	LocationConcentric   sql.NullString
-	LocationRadialHour   sql.NullInt16
-	LocationRadialMinute sql.NullInt16
-	LocationDescription  sql.NullString
+	Event    int32
+	Number   int32
+	Created  float64
+	Priority int8
+	State    IncidentState
 }
 
+// SUMMARY,
+// LOCATION_NAME,
+// LOCATION_CONCENTRIC,
+// LOCATION_RADIAL_HOUR,
+// LOCATION_RADIAL_MINUTE,
+// LOCATION_DESCRIPTION
 func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createIncident,
 		arg.Event,
@@ -317,12 +311,6 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 		arg.Created,
 		arg.Priority,
 		arg.State,
-		arg.Summary,
-		arg.LocationName,
-		arg.LocationConcentric,
-		arg.LocationRadialHour,
-		arg.LocationRadialMinute,
-		arg.LocationDescription,
 	)
 	if err != nil {
 		return 0, err
@@ -705,6 +693,7 @@ func (q *Queries) HideShowIncidentType(ctx context.Context, arg HideShowIncident
 }
 
 const incident = `-- name: Incident :one
+
 select
     i.event, i.number, i.created, i.priority, i.state, i.summary, i.location_name, i.location_concentric, i.location_radial_hour, i.location_radial_minute, i.location_description,
     (
@@ -744,6 +733,26 @@ type IncidentRow struct {
 	RangerHandles      interface{}
 }
 
+// -- name: UpdateIncident :exec
+// UPDATE INCIDENT (
+//
+//	EVENT,
+//	NUMBER,
+//	CREATED,
+//	PRIORITY,
+//	STATE,
+//	SUMMARY,
+//	LOCATION_NAME,
+//	LOCATION_CONCENTRIC,
+//	LOCATION_RADIAL_HOUR,
+//	LOCATION_RADIAL_MINUTE,
+//	LOCATION_DESCRIPTION
+//
+// )
+// values (
+//
+//	    ?,?,?,?,?,?,?,?,?,?,?
+//	);
 func (q *Queries) Incident(ctx context.Context, arg IncidentParams) (IncidentRow, error) {
 	row := q.db.QueryRowContext(ctx, incident, arg.Event, arg.Number)
 	var i IncidentRow
@@ -1116,6 +1125,53 @@ func (q *Queries) UpdateFieldReport(ctx context.Context, arg UpdateFieldReportPa
 	_, err := q.db.ExecContext(ctx, updateFieldReport,
 		arg.Summary,
 		arg.IncidentNumber,
+		arg.Event,
+		arg.Number,
+	)
+	return err
+}
+
+const updateIncident = `-- name: UpdateIncident :exec
+update INCIDENT set
+    CREATED = ?,
+    PRIORITY = ?,
+    STATE = ?,
+    SUMMARY = ?,
+    LOCATION_NAME = ?,
+    LOCATION_CONCENTRIC = ?,
+    LOCATION_RADIAL_HOUR = ?,
+    LOCATION_RADIAL_MINUTE = ?,
+    LOCATION_DESCRIPTION = ?
+where
+    EVENT = ?
+    and NUMBER = ?
+`
+
+type UpdateIncidentParams struct {
+	Created              float64
+	Priority             int8
+	State                IncidentState
+	Summary              sql.NullString
+	LocationName         sql.NullString
+	LocationConcentric   sql.NullString
+	LocationRadialHour   sql.NullInt16
+	LocationRadialMinute sql.NullInt16
+	LocationDescription  sql.NullString
+	Event                int32
+	Number               int32
+}
+
+func (q *Queries) UpdateIncident(ctx context.Context, arg UpdateIncidentParams) error {
+	_, err := q.db.ExecContext(ctx, updateIncident,
+		arg.Created,
+		arg.Priority,
+		arg.State,
+		arg.Summary,
+		arg.LocationName,
+		arg.LocationConcentric,
+		arg.LocationRadialHour,
+		arg.LocationRadialMinute,
+		arg.LocationDescription,
 		arg.Event,
 		arg.Number,
 	)

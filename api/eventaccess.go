@@ -88,7 +88,7 @@ func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request
 	defer eventAccessWriteMu.Unlock()
 
 	ctx := req.Context()
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	bodyBytes, ok := readBody(w, req)
@@ -103,7 +103,7 @@ func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request
 	}
 	var errs []error
 	for eventName, access := range eventsAccess {
-		event, success := eventFromName(w, req, eventName, action.imsDB)
+		event, success := mustGetEvent(w, req, eventName, action.imsDB)
 		if !success {
 			return
 		}

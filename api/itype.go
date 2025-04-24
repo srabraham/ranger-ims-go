@@ -16,7 +16,7 @@ type GetIncidentTypes struct {
 func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	response := make(imsjson.IncidentTypes, 0)
 
-	if success := parseForm(w, req); !success {
+	if success := mustParseForm(w, req); !success {
 		return
 	}
 	includeHidden := req.Form.Get("hidden") == "true"
@@ -45,7 +45,7 @@ type EditIncidentTypes struct {
 
 func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	typesReq, ok := readBodyAs[imsjson.EditIncidentTypesRequest](w, req)
+	typesReq, ok := mustReadBodyAs[imsjson.EditIncidentTypesRequest](w, req)
 	if !ok {
 		return
 	}

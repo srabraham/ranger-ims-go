@@ -22,7 +22,7 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -40,7 +40,7 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
 	}
 
-	re, ok := readBodyAs[imsjson.ReportEntry](w, req)
+	re, ok := mustReadBodyAs[imsjson.ReportEntry](w, req)
 	if !ok {
 		return
 	}
@@ -97,7 +97,7 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
 
-	event, ok := eventFromName(w, req, req.PathValue("eventName"), action.imsDB)
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
@@ -115,7 +115,7 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
 	}
 
-	re, ok := readBodyAs[imsjson.ReportEntry](w, req)
+	re, ok := mustReadBodyAs[imsjson.ReportEntry](w, req)
 	if !ok {
 		return
 	}

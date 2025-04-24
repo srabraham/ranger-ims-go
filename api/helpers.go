@@ -9,7 +9,7 @@ import (
 	"net/http"
 )
 
-func parseForm(w http.ResponseWriter, req *http.Request) (success bool) {
+func mustParseForm(w http.ResponseWriter, req *http.Request) (success bool) {
 	if err := req.ParseForm(); err != nil {
 		slog.Error("Failed to parse form", "error", err, "path", req.URL.Path)
 		http.Error(w, "Failed to parse HTTP form", http.StatusBadRequest)
@@ -29,7 +29,7 @@ func readBody(w http.ResponseWriter, req *http.Request) (bytes []byte, success b
 	return bodyBytes, true
 }
 
-func readBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, success bool) {
+func mustReadBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, success bool) {
 	defer req.Body.Close()
 	bodyBytes, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -62,7 +62,7 @@ func readBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, success b
 //}
 
 func eventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event imsdb.Event, success bool) {
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return imsdb.Event{}, false
 	}
 	eventName := req.FormValue("event_id")
@@ -80,7 +80,7 @@ func eventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB)
 	return eventRow.Event, true
 }
 
-func eventFromName(w http.ResponseWriter, req *http.Request, eventName string, imsDB *sql.DB) (event imsdb.Event, success bool) {
+func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, imsDB *sql.DB) (event imsdb.Event, success bool) {
 	if eventName == "" {
 		slog.Error("No eventName was provided")
 		http.Error(w, "No eventName was provided", http.StatusInternalServerError)

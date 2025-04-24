@@ -720,7 +720,7 @@ async function editLocationAddressRadialMinute() {
 }
 async function editLocationAddressConcentric() {
     const concentricInput = document.getElementById("incident_location_address_concentric");
-    await ims.editFromElement(concentricInput, "location.concentric", transformAddressInteger);
+    await ims.editFromElement(concentricInput, "location.concentric");
 }
 async function editLocationDescription() {
     const descriptionInput = document.getElementById("incident_location_description");

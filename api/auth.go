@@ -150,7 +150,7 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp.Admin = slices.Contains(roles, auth.Administrator)
 
 	if err := req.ParseForm(); err != nil {
-		slog.Error("parseForm error", "error", err)
+		slog.Error("mustParseForm error", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

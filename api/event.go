@@ -66,7 +66,7 @@ var allowedEventNames = regexp.MustCompile(`^[\w-]+$`)
 
 func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	if ok := parseForm(w, req); !ok {
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	bodyBytes, ok := readBody(w, req)
