@@ -54,3 +54,46 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Cache-Control", "max-age=1200, private")
 	writeJSON(w, resp)
 }
+
+type EditStreets struct {
+	imsDB *sql.DB
+}
+
+func (action EditStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	eventsStreets, ok := readBodyAs[imsjson.EventsStreets](w, req)
+	if !ok {
+		return
+	}
+	for eventName, newEventStreets := range eventsStreets {
+		event, ok := eventFromName(w, req, eventName, action.imsDB)
+		if !ok {
+			return
+		}
+		currentStreets, err := imsdb.New(action.imsDB).ConcentricStreets(req.Context(), event.ID)
+		if err != nil {
+			slog.Error("Failed to get streets", "error", err)
+			http.Error(w, "Failed to get streets", http.StatusInternalServerError)
+			return
+		}
+		currentStreetIDs := make(map[string]bool)
+		for _, street := range currentStreets {
+			currentStreetIDs[street.ConcentricStreet.ID] = true
+		}
+		for streetID, streetName := range newEventStreets {
+			if !currentStreetIDs[streetID] {
+				err = imsdb.New(action.imsDB).CreateConcentricStreet(ctx, imsdb.CreateConcentricStreetParams{
+					Event: event.ID,
+					ID:    streetID,
+					Name:  streetName,
+				})
+				if err != nil {
+					slog.Error("Failed to create concentric street", "error", err)
+					http.Error(w, "Failed to create concentric street", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+	}
+	http.Error(w, "Success", http.StatusNoContent)
+}

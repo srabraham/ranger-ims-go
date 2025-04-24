@@ -223,6 +223,22 @@ func (q *Queries) ConcentricStreets(ctx context.Context, event int32) ([]Concent
 	return items, nil
 }
 
+const createConcentricStreet = `-- name: CreateConcentricStreet :exec
+insert into CONCENTRIC_STREET (EVENT, ID, NAME)
+values (?, ?, ?)
+`
+
+type CreateConcentricStreetParams struct {
+	Event int32
+	ID    string
+	Name  string
+}
+
+func (q *Queries) CreateConcentricStreet(ctx context.Context, arg CreateConcentricStreetParams) error {
+	_, err := q.db.ExecContext(ctx, createConcentricStreet, arg.Event, arg.ID, arg.Name)
+	return err
+}
+
 const createEvent = `-- name: CreateEvent :execlastid
 insert into EVENT (NAME) values (?)
 `

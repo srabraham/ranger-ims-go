@@ -199,6 +199,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) 
 		),
 	)
 
+	mux.Handle("POST /ims/api/streets",
+		Adapt(
+			EditStreets{imsDB: db},
+			LogBeforeAfter(),
+			ExtractClaimsToContext(j),
+			RequireAuthenticated(),
+			RequireAuthorization(auth.AdministrateStreets, db, cfg.Core.Admins),
+		),
+	)
+
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
 			GetIncidentTypes{imsDB: db},

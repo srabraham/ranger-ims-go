@@ -294,3 +294,7 @@ values (?, ?)
 -- name: HideShowIncidentType :exec
 update INCIDENT_TYPE set HIDDEN = ?
 where NAME = ?;
+
+-- name: CreateConcentricStreet :exec
+insert into CONCENTRIC_STREET (EVENT, ID, NAME)
+values (?, ?, ?);
