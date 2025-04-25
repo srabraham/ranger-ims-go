@@ -1,8 +1,8 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"io"
 	"log/slog"
@@ -50,7 +50,7 @@ func mustReadBodyAs[T any](w http.ResponseWriter, req *http.Request) (t T, succe
 //	return eventRow.Event, true
 //}
 
-func mustEventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql.DB) (event imsdb.Event, success bool) {
+func mustEventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *store.DB) (event imsdb.Event, success bool) {
 	if ok := mustParseForm(w, req); !ok {
 		return imsdb.Event{}, false
 	}
@@ -69,14 +69,14 @@ func mustEventFromFormValue(w http.ResponseWriter, req *http.Request, imsDB *sql
 	return eventRow.Event, true
 }
 
-func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, imsDB *sql.DB) (event imsdb.Event, success bool) {
+func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, imsDB *store.DB) (event imsdb.Event, success bool) {
 	if eventName == "" {
 		slog.Error("No eventName was provided")
 		http.Error(w, "No eventName was provided", http.StatusInternalServerError)
 		return imsdb.Event{}, false
 	}
 
-	eventRow, err := imsdb.New(imsdb.DBTX(imsDB)).QueryEventID(req.Context(), eventName)
+	eventRow, err := imsdb.New(imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		http.Error(w, "Failed to get event ID", http.StatusInternalServerError)

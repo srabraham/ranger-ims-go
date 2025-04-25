@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
@@ -14,14 +13,14 @@ import (
 )
 
 type GetEventAccesses struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := imsjson.EventsAccess{}
 	ctx := req.Context()
 
-	resp, err := GetEventsAccess(ctx, action.imsDB, "")
+	resp, err := GetEventsAccess(ctx, action.imsDB)
 	if err != nil {
 		slog.Error("GetEventsAccess failed", "error", err)
 		http.Error(w, "Failed to get events access", http.StatusInternalServerError)
@@ -30,12 +29,10 @@ func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Reques
 	mustWriteJSON(w, resp)
 }
 
-func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
+func GetEventsAccess(ctx context.Context, imsDB *store.DB) (imsjson.EventsAccess, error) {
 	result := make(imsjson.EventsAccess)
 
-	dbtx := store.TimedDBTX{DB: imsDB}
-
-	allEventRows, err := imsdb.New(dbtx).Events(ctx)
+	allEventRows, err := imsdb.New(imsDB).Events(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("[Events]: %w", err)
 	}
@@ -44,7 +41,7 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 		storedEvents = append(storedEvents, aer.Event)
 	}
 
-	accessRows, err := imsdb.New(dbtx).EventAccessAll(ctx)
+	accessRows, err := imsdb.New(imsDB).EventAccessAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("[EventAccessAll]: %w", err)
 	}
@@ -81,7 +78,7 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 }
 
 type PostEventAccess struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 var eventAccessWriteMu sync.Mutex

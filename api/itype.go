@@ -1,8 +1,8 @@
 package api
 
 import (
-	"database/sql"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
@@ -10,7 +10,7 @@ import (
 )
 
 type GetIncidentTypes struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -40,7 +40,7 @@ func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reques
 }
 
 type EditIncidentTypes struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"cmp"
-	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
@@ -15,7 +14,7 @@ import (
 )
 
 type GetEvents struct {
-	imsDB     *sql.DB
+	imsDB     *store.DB
 	imsAdmins []string
 }
 
@@ -23,10 +22,8 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 	ctx := req.Context()
 
-	dbtx := imsdb.New(store.TimedDBTX{DB: action.imsDB})
-
 	start := time.Now()
-	eventRows, err := dbtx.Events(ctx)
+	eventRows, err := imsdb.New(action.imsDB).Events(ctx)
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -34,7 +31,7 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	slog.Info("querying events took", "duration", time.Since(start))
 
-	accessRows, err := dbtx.EventAccessAll(ctx)
+	accessRows, err := imsdb.New(action.imsDB).EventAccessAll(ctx)
 	if err != nil {
 		panic(err)
 		//return nil, fmt.Errorf("[EventAccessAll]: %w", err)
@@ -56,18 +53,6 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			claims.RangerPositions(),
 			claims.RangerTeams(),
 		)
-		//perms, err := auth.UserPermissions2(
-		//	ctx,
-		//	er.Event.ID,
-		//	action.imsDB,
-		//	action.imsAdmins,
-		//	*claims,
-		//)
-		//if err != nil {
-		//	slog.Error("UserPermissions", "error", err)
-		//	w.WriteHeader(http.StatusInternalServerError)
-		//	return
-		//}
 		if perms[auth.ReadEventName] {
 			resp = append(resp, imsjson.Event{
 				ID:   er.Event.ID,
@@ -75,7 +60,6 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
-	slog.Info("computing permissions took", "duration", time.Since(start))
 
 	slices.SortFunc(resp, func(a, b imsjson.Event) int {
 		return cmp.Compare(a.ID, b.ID)
@@ -86,7 +70,7 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 type EditEvents struct {
-	imsDB     *sql.DB
+	imsDB     *store.DB
 	imsAdmins []string
 }
 
@@ -100,8 +84,6 @@ func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	dbtx := imsdb.New(store.TimedDBTX{DB: action.imsDB})
-
 	editRequest, ok := mustReadBodyAs[imsjson.EditEventsRequest](w, req)
 	if !ok {
 		return
@@ -113,7 +95,7 @@ func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Event names must match the pattern "+allowedEventNames.String(), http.StatusBadRequest)
 			return
 		}
-		id, err := dbtx.CreateEvent(ctx, eventName)
+		id, err := imsdb.New(action.imsDB).CreateEvent(ctx, eventName)
 		if err != nil {
 			slog.Error("Failed to create event", "eventName", eventName, "error", err)
 			http.Error(w, "Failed to create event", http.StatusInternalServerError)

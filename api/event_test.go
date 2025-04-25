@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
@@ -43,7 +42,7 @@ func TestMain(m *testing.M) {
 var (
 	imsDBContainer testcontainers.Container
 	imsCfg         *conf.IMSConfig
-	imsDB          *sql.DB
+	imsDB          *store.DB
 )
 
 func setup(ctx context.Context) {
@@ -81,7 +80,7 @@ func setup(ctx context.Context) {
 	}
 	port, _ := strconv.Atoi(strings.TrimPrefix(endpoint, "localhost:"))
 	imsCfg.Store.MySQL.HostPort = int32(port)
-	imsDB = store.MariaDB(imsCfg)
+	imsDB = &store.DB{DB: store.MariaDB(imsCfg)}
 }
 
 func shutdown(ctx context.Context) {

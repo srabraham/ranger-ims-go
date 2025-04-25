@@ -1,15 +1,15 @@
 package api
 
 import (
-	"database/sql"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
 )
 
 type GetStreets struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -56,7 +56,7 @@ func (action GetStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 type EditStreets struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action EditStreets) ServeHTTP(w http.ResponseWriter, req *http.Request) {

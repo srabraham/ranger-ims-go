@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
@@ -82,14 +81,13 @@ var RolesToPerms = map[Role]map[Permission]bool{
 func UserPermissions2(
 	ctx context.Context,
 	eventID int32, // or 0 for no event
-	imsDB *sql.DB,
+	imsDB *store.DB,
 	imsAdmins []string,
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
 	var eventAccesses []imsdb.EventAccess
-	dbtx := imsdb.New(store.TimedDBTX{DB: imsDB})
 	if eventID != 0 {
-		accessRows, err := dbtx.EventAccess(ctx, eventID)
+		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventID)
 		if err != nil {
 			return nil, fmt.Errorf("EventAccess: %w", err)
 		}

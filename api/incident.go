@@ -18,7 +18,7 @@ import (
 )
 
 type GetIncidents struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -32,9 +32,7 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	dbtx := store.TimedDBTX{DB: action.imsDB}
-
-	reportEntries, err := imsdb.New(dbtx).Incidents_ReportEntries(req.Context(),
+	reportEntries, err := imsdb.New(action.imsDB).Incidents_ReportEntries(req.Context(),
 		imsdb.Incidents_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
@@ -59,7 +57,7 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 
-	rows, err := imsdb.New(dbtx).Incidents(req.Context(), event.ID)
+	rows, err := imsdb.New(action.imsDB).Incidents(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -125,7 +123,7 @@ func parseInt16(s *string) sql.NullInt16 {
 }
 
 type GetIncident struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -221,7 +219,7 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	mustWriteJSON(w, result)
 }
 
-func fetchIncident(ctx context.Context, imsDB *sql.DB, eventID, incidentNumber int32) (incident imsdb.IncidentRow, reportEntries []imsdb.ReportEntry, err error) {
+func fetchIncident(ctx context.Context, imsDB *store.DB, eventID, incidentNumber int32) (incident imsdb.IncidentRow, reportEntries []imsdb.ReportEntry, err error) {
 	//var incidentTypes imsjson.IncidentTypes
 	//var rangerHandles []string
 	//var fieldReportNumbers []int32
@@ -297,7 +295,7 @@ func addIncidentReportEntry(ctx context.Context, q *imsdb.Queries, eventID, inci
 }
 
 type NewIncident struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 	es    *EventSourcerer
 }
 
@@ -384,9 +382,9 @@ func readExtraIncidentRowFields(row imsdb.IncidentRow) (incidentTypes, rangerHan
 	return incidentTypes, rangerHandles, fieldReportNumbers, nil
 }
 
-func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newIncident imsjson.Incident, author string) error {
+func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, newIncident imsjson.Incident, author string) error {
 
-	storedIncidentRow, err := imsdb.New(imsdb.DBTX(imsDB)).Incident(ctx, imsdb.IncidentParams{
+	storedIncidentRow, err := imsdb.New(imsDB).Incident(ctx, imsdb.IncidentParams{
 		Event:  newIncident.EventID,
 		Number: newIncident.Number,
 	})
@@ -403,7 +401,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 
 	txn, _ := imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(imsdb.DBTX(imsDB)).WithTx(txn)
+	dbTxn := imsdb.New(txn)
 
 	update := imsdb.UpdateIncidentParams{
 		Event:                storedIncident.Event,
@@ -453,7 +451,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		update.LocationDescription = sqlNullString(newIncident.Location.Description)
 		logs = append(logs, fmt.Sprintf("location description: %v", update.LocationDescription.String))
 	}
-	err = dbTX.UpdateIncident(ctx, update)
+	err = dbTxn.UpdateIncident(ctx, update)
 	if err != nil {
 		return fmt.Errorf("[UpdateIncident]: %w", err)
 	}
@@ -464,7 +462,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(add) > 0 {
 			logs = append(logs, fmt.Sprintf("Rangers added: %v", add))
 			for _, rh := range add {
-				err = dbTX.AttachRangerHandleToIncident(ctx, imsdb.AttachRangerHandleToIncidentParams{
+				err = dbTxn.AttachRangerHandleToIncident(ctx, imsdb.AttachRangerHandleToIncidentParams{
 					Event:          newIncident.EventID,
 					IncidentNumber: newIncident.Number,
 					RangerHandle:   rh,
@@ -477,7 +475,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(sub) > 0 {
 			logs = append(logs, fmt.Sprintf("Rangers removed: %v", sub))
 			for _, rh := range sub {
-				err = dbTX.DetachRangerHandleFromIncident(ctx, imsdb.DetachRangerHandleFromIncidentParams{
+				err = dbTxn.DetachRangerHandleFromIncident(ctx, imsdb.DetachRangerHandleFromIncidentParams{
 					Event:          newIncident.EventID,
 					IncidentNumber: newIncident.Number,
 					RangerHandle:   rh,
@@ -495,7 +493,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(add) > 0 {
 			logs = append(logs, fmt.Sprintf("type added: %v", add))
 			for _, itype := range add {
-				err = dbTX.AttachIncidentTypeToIncident(ctx, imsdb.AttachIncidentTypeToIncidentParams{
+				err = dbTxn.AttachIncidentTypeToIncident(ctx, imsdb.AttachIncidentTypeToIncidentParams{
 					Event:          newIncident.EventID,
 					IncidentNumber: newIncident.Number,
 					Name:           itype,
@@ -508,7 +506,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(sub) > 0 {
 			logs = append(logs, fmt.Sprintf("type removed: %v", sub))
 			for _, rh := range sub {
-				err = dbTX.DetachIncidentTypeFromIncident(ctx, imsdb.DetachIncidentTypeFromIncidentParams{
+				err = dbTxn.DetachIncidentTypeFromIncident(ctx, imsdb.DetachIncidentTypeFromIncidentParams{
 					Event:          newIncident.EventID,
 					IncidentNumber: newIncident.Number,
 					Name:           rh,
@@ -529,7 +527,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(add) > 0 {
 			logs = append(logs, fmt.Sprintf("Field Report added: %v", add))
 			for _, frNum := range add {
-				err = dbTX.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
+				err = dbTxn.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
 					Event:          newIncident.EventID,
 					Number:         frNum,
 					IncidentNumber: sql.NullInt32{Int32: newIncident.Number, Valid: true},
@@ -542,7 +540,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if len(sub) > 0 {
 			logs = append(logs, fmt.Sprintf("Field Report removed: %v", sub))
 			for _, frNum := range sub {
-				err = dbTX.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
+				err = dbTxn.AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
 					Event:          newIncident.EventID,
 					Number:         frNum,
 					IncidentNumber: sql.NullInt32{},
@@ -555,7 +553,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 	}
 
 	if len(logs) > 0 {
-		err = addIncidentReportEntry(ctx, dbTX, newIncident.EventID, newIncident.Number, author, fmt.Sprintf("Changed %v", strings.Join(logs, ", ")), true)
+		err = addIncidentReportEntry(ctx, dbTxn, newIncident.EventID, newIncident.Number, author, fmt.Sprintf("Changed %v", strings.Join(logs, ", ")), true)
 		if err != nil {
 			return fmt.Errorf("[addIncidentReportEntry]: %w", err)
 		}
@@ -565,7 +563,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 		if entry.Text == "" {
 			continue
 		}
-		err = addIncidentReportEntry(ctx, dbTX, newIncident.EventID, newIncident.Number, author, entry.Text, false)
+		err = addIncidentReportEntry(ctx, dbTxn, newIncident.EventID, newIncident.Number, author, entry.Text, false)
 		if err != nil {
 			return fmt.Errorf("[addIncidentReportEntry]: %w", err)
 		}
@@ -594,7 +592,7 @@ func sliceSubtract[T comparable](a, b []T) []T {
 }
 
 type EditIncident struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 	es    *EventSourcerer
 }
 

@@ -9,6 +9,8 @@ import (
 	"github.com/srabraham/ranger-ims-go/conf"
 	"log"
 	"log/slog"
+	"strings"
+	"time"
 )
 
 //go:embed schema.sql
@@ -28,7 +30,7 @@ func MariaDB(imsCfg *conf.IMSConfig) *sql.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	db.SetMaxOpenConns(20)
 	pingErr := db.Ping()
 	if pingErr != nil {
 		log.Panic(pingErr)
@@ -37,38 +39,41 @@ func MariaDB(imsCfg *conf.IMSConfig) *sql.DB {
 	return db
 }
 
-type TimedDBTX struct {
+type DB struct {
 	*sql.DB
 }
 
-func (l TimedDBTX) ExecContext(ctx context.Context, s string, i ...interface{}) (sql.Result, error) {
-	//start := time.Now()
-	//defer func() {
-	//	slog.Info("ExecContext complete", "s", s, "time", time.Since(start))
-	//}()
-	return l.DB.ExecContext(ctx, s, i...)
+func (l DB) ExecContext(ctx context.Context, s string, i ...interface{}) (sql.Result, error) {
+	start := time.Now()
+	execContext, err := l.DB.ExecContext(ctx, s, i...)
+	logQuery(s, start, err)
+	return execContext, err
 }
 
-func (l TimedDBTX) PrepareContext(ctx context.Context, s string) (*sql.Stmt, error) {
-	//start := time.Now()
-	//defer func() {
-	//	slog.Info("PrepareContext complete", "s", s, "time", time.Since(start))
-	//}()
-	return l.DB.PrepareContext(ctx, s)
+func (l DB) PrepareContext(ctx context.Context, s string) (*sql.Stmt, error) {
+	start := time.Now()
+	stmt, err := l.DB.PrepareContext(ctx, s)
+	logQuery(s, start, err)
+	return stmt, err
 }
 
-func (l TimedDBTX) QueryContext(ctx context.Context, s string, i ...interface{}) (*sql.Rows, error) {
-	//start := time.Now()
-	//defer func() {
-	//	slog.Info("QueryContext complete", "s", s, "time", time.Since(start))
-	//}()
-	return l.DB.QueryContext(ctx, s, i...)
+func (l DB) QueryContext(ctx context.Context, s string, i ...interface{}) (*sql.Rows, error) {
+	start := time.Now()
+	rows, err := l.DB.QueryContext(ctx, s, i...)
+	logQuery(s, start, err)
+	return rows, err
 }
 
-func (l TimedDBTX) QueryRowContext(ctx context.Context, s string, i ...interface{}) *sql.Row {
-	//start := time.Now()
-	//defer func() {
-	//	slog.Info("QueryRowContext complete", "s", s, "time", time.Since(start))
-	//}()
-	return l.DB.QueryRowContext(ctx, s, i...)
+func (l DB) QueryRowContext(ctx context.Context, s string, i ...interface{}) *sql.Row {
+	start := time.Now()
+	row := l.DB.QueryRowContext(ctx, s, i...)
+	logQuery(s, start, nil)
+	return row
+}
+
+func logQuery(s string, start time.Time, err error) {
+	queryName, _, _ := strings.Cut(s, "\n")
+	queryName = strings.TrimPrefix(queryName, "-- name: ")
+	// time.Since(start).Round(1*time.Microsecond)
+	slog.Debug("Query", "time (ms)", time.Since(start).Milliseconds(), "query", queryName, "err", err)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/web"
 	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -31,13 +32,14 @@ to quickly create a Cobra application.`,
 }
 
 func runServer(cmd *cobra.Command, args []string) {
-	fmt.Println("serve called")
+
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	imsDB := store.MariaDB(conf.Cfg)
 	clubhouseDB := directory.MariaDB()
 
 	mux := http.NewServeMux()
-	api.AddToMux(mux, conf.Cfg, imsDB, clubhouseDB)
+	api.AddToMux(mux, conf.Cfg, &store.DB{DB: imsDB}, clubhouseDB)
 	web.AddToMux(mux, conf.Cfg)
 	//mux := api.CreateMux(context.Background(), imsDB, clubhouseDB)
 

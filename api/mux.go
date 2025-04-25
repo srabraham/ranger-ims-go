@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
+	"github.com/srabraham/ranger-ims-go/store"
 	"log/slog"
 	"net/http"
 	"time"
 )
 
-func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db, clubhouseDB *sql.DB) *http.ServeMux {
+func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB *sql.DB) *http.ServeMux {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
@@ -346,7 +347,7 @@ func RequireAuthenticated() Adapter {
 	}
 }
 
-func RequireAuthorization(required auth.Permission, imsDB *sql.DB, imsAdmins []string) Adapter {
+func RequireAuthorization(required auth.Permission, imsDB *store.DB, imsAdmins []string) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)

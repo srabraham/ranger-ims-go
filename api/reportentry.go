@@ -1,9 +1,9 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log"
 	"log/slog"
@@ -12,7 +12,7 @@ import (
 )
 
 type EditFieldReportReportEntry struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	eventSource *EventSourcerer
 }
 
@@ -52,9 +52,9 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+	dbTxn := imsdb.New(txn)
 
-	err := dbTX.SetFieldReportReportEntryStricken(ctx, imsdb.SetFieldReportReportEntryStrickenParams{
+	err := dbTxn.SetFieldReportReportEntryStricken(ctx, imsdb.SetFieldReportReportEntryStrickenParams{
 		Stricken:          re.Stricken,
 		Event:             event.ID,
 		FieldReportNumber: fieldReportNumber,
@@ -69,7 +69,7 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 	if !re.Stricken {
 		struckVerb = "Unstruck"
 	}
-	err = addFRReportEntry(ctx, dbTX, event.ID, fieldReportNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
+	err = addFRReportEntry(ctx, dbTxn, event.ID, fieldReportNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
 	if err != nil {
 		slog.Error("Error adding report entry", "error", err)
 		http.Error(w, "Error adding report entry", http.StatusInternalServerError)
@@ -87,7 +87,7 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 }
 
 type EditIncidentReportEntry struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	eventSource *EventSourcerer
 }
 
@@ -122,9 +122,9 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+	dbTxn := imsdb.New(txn)
 
-	err := dbTX.SetIncidentReportEntryStricken(ctx, imsdb.SetIncidentReportEntryStrickenParams{
+	err := dbTxn.SetIncidentReportEntryStricken(ctx, imsdb.SetIncidentReportEntryStrickenParams{
 		Stricken:       re.Stricken,
 		Event:          event.ID,
 		IncidentNumber: incidentNumber,
@@ -139,7 +139,7 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 	if !re.Stricken {
 		struckVerb = "Unstruck"
 	}
-	err = addIncidentReportEntry(ctx, dbTX, event.ID, incidentNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
+	err = addIncidentReportEntry(ctx, dbTxn, event.ID, incidentNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
 	if err != nil {
 		slog.Error("Error adding report entry", "error", err)
 		http.Error(w, "Error adding report entry", http.StatusInternalServerError)

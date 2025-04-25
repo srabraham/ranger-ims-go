@@ -6,6 +6,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/clubhousedb"
+	"github.com/srabraham/ranger-ims-go/store"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 )
 
 type PostAuth struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	clubhouseDB *sql.DB
 	jwtSecret   string
 	jwtDuration time.Duration
@@ -110,7 +111,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 type GetAuth struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	clubhouseDB *sql.DB
 	jwtSecret   string
 	admins      []string

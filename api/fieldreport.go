@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log"
 	"log/slog"
@@ -14,7 +15,7 @@ import (
 )
 
 type GetFieldReports struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -78,7 +79,7 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 }
 
 type GetFieldReport struct {
-	imsDB *sql.DB
+	imsDB *store.DB
 }
 
 func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -151,7 +152,7 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 }
 
 type EditFieldReport struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	eventSource *EventSourcerer
 }
 
@@ -226,19 +227,19 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+	dbTxn := imsdb.New(txn) //.WithTx(txn)
 
 	if requestFR.Summary != nil {
 		storedFR.Summary = sqlNullString(requestFR.Summary)
 		text := "Changed summary to: " + *requestFR.Summary
-		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, text, true)
+		err := addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, text, true)
 		if err != nil {
 			slog.Error("Error adding system fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
 			return
 		}
 	}
-	_ = dbTX.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
+	_ = dbTxn.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
 		Event:          storedFR.Event,
 		Number:         storedFR.Number,
 		Summary:        storedFR.Summary,
@@ -248,7 +249,7 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTX, event.ID, storedFR.Number, author, entry.Text, false)
+		err := addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, entry.Text, false)
 		if err != nil {
 			slog.Error("Error adding fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
@@ -268,7 +269,7 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 }
 
 type NewFieldReport struct {
-	imsDB       *sql.DB
+	imsDB       *store.DB
 	eventSource *EventSourcerer
 }
 
@@ -297,9 +298,9 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(action.imsDB).WithTx(txn)
+	dbTxn := imsdb.New(txn)
 
-	_ = dbTX.CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
+	_ = dbTxn.CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
 		Event:          event.ID,
 		Number:         int32(newFrNum),
 		Created:        float64(time.Now().Unix()),
@@ -311,7 +312,7 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, entry.Text, false)
+		err := addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, entry.Text, false)
 		if err != nil {
 			slog.Error("Error adding system fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
@@ -321,7 +322,7 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 
 	if fr.Summary != nil {
 		text := "Changed summary to: " + *fr.Summary
-		err := addFRReportEntry(ctx, dbTX, event.ID, int32(newFrNum), author, text, true)
+		err := addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, text, true)
 		if err != nil {
 			slog.Error("Error adding system fr report entry", "error", err)
 			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
