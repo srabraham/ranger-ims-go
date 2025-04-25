@@ -442,7 +442,9 @@ function drawRangers() {
             const person = personnel[handle];
             ranger = document.createElement("a");
             ranger.innerText = ims.textAsHTML(rangerAsString(person));
-            ranger.href = `${clubhousePersonURL}/${person.directory_id}`;
+            if (person.directory_id != null) {
+                ranger.href = `${clubhousePersonURL}/${person.directory_id}`;
+            }
         }
         const item = _rangerItem.cloneNode(true);
         item.append(ranger);

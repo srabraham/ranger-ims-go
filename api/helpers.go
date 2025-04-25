@@ -101,3 +101,25 @@ func mustWriteJSON(w http.ResponseWriter, resp any) (success bool) {
 	}
 	return true
 }
+
+func mustGetJwtCtx(w http.ResponseWriter, req *http.Request) (JWTContext, bool) {
+	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
+	if !found {
+		slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
+		http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
+			http.StatusInternalServerError)
+		return JWTContext{}, false
+	}
+	return jwtCtx, true
+}
+
+func mustGetPermissionsCtx(w http.ResponseWriter, req *http.Request) (PermissionsContext, bool) {
+	permsCtx, found := req.Context().Value(PermissionsContextKey).(PermissionsContext)
+	if !found {
+		slog.Error("the ExtractPermissionsToContext adapter must be called before mustGetPermissionsCtx")
+		http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
+			http.StatusInternalServerError)
+		return PermissionsContext{}, false
+	}
+	return permsCtx, true
+}

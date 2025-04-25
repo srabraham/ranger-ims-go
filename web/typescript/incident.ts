@@ -264,7 +264,7 @@ let personnel: PersonnelMap|null = null;
 
 interface Personnel {
     handle: string;
-    directory_id: number;
+    directory_id?: number|null;
     status: string;
 }
 
@@ -560,7 +560,9 @@ function drawRangers() {
             const person = personnel[handle];
             ranger = document.createElement("a");
             ranger.innerText = ims.textAsHTML(rangerAsString(person));
-            ranger.href = `${clubhousePersonURL}/${person.directory_id}`;
+            if (person.directory_id != null) {
+                ranger.href = `${clubhousePersonURL}/${person.directory_id}`;
+            }
         }
         const item = _rangerItem!.cloneNode(true) as HTMLElement;
         item.append(ranger!);

@@ -1,13 +1,10 @@
 package api
 
 import (
-	"database/sql"
-	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
-	clubhousequeries "github.com/srabraham/ranger-ims-go/directory/clubhousedb"
+	"github.com/srabraham/ranger-ims-go/directory"
 	"github.com/srabraham/ranger-ims-go/store"
-	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -17,7 +14,7 @@ import (
 
 type PostAuth struct {
 	imsDB       *store.DB
-	clubhouseDB *sql.DB
+	userStore   *directory.UserStore
 	jwtSecret   string
 	jwtDuration time.Duration
 }
@@ -31,76 +28,63 @@ type PostAuthResponse struct {
 }
 
 func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	results, err := clubhousequeries.New(action.clubhouseDB).RangersById(req.Context())
-	if err != nil {
-		slog.Error("Failed to fetch Rangers", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	b, err := io.ReadAll(req.Body)
-	defer req.Body.Close()
-	if err != nil {
+	//results, err := clubhousequeries.New(action.clubhouseDB).RangersById(req.Context())
+	//if err != nil {
+	//	slog.Error("Failed to fetch Rangers", "error", err)
+	//	w.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
+	//b, err := io.ReadAll(req.Body)
+	//defer req.Body.Close()
+	//if err != nil {
+	//	return
+	//}
+
+	vals, ok := mustReadBodyAs[PostAuthRequest](w, req)
+	if !ok {
 		return
 	}
 
-	vals := PostAuthRequest{}
-	if err = json.Unmarshal(b, &vals); err != nil {
-		slog.Error("Failed to parse request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+	rangers, err := action.userStore.GetRangers(req.Context())
+	if err != nil {
+		slog.Error("Failed to get personnel", "error", err)
+		http.Error(w, "Failed to get personnel", http.StatusInternalServerError)
 		return
 	}
-	slog.InfoContext(req.Context(), "attempting login", "identification", vals.Identification)
+
+	//if err = json.Unmarshal(b, &vals); err != nil {
+	//	slog.Error("Failed to parse request body", "error", err)
+	//	w.WriteHeader(http.StatusBadRequest)
+	//	return
+	//}
 
 	var storedPassHash string
 	var userID int64
 	var onsite bool
-	for _, person := range results {
-		callsignMatch := person.Callsign == vals.Identification
-		emailMatch := person.Email.Valid && strings.ToLower(person.Email.String) == strings.ToLower(vals.Identification)
+	for _, person := range rangers {
+		callsignMatch := person.Handle == vals.Identification
+		emailMatch := person.Email != "" && strings.ToLower(person.Email) == strings.ToLower(vals.Identification)
 		if callsignMatch || emailMatch {
-			userID = person.ID
-			storedPassHash = person.Password.String
-			onsite = person.OnSite
+			userID = person.DirectoryID
+			storedPassHash = person.Password
+			onsite = person.Onsite
 			break
 		}
 	}
 
 	correct, _ := auth.VerifyPassword(vals.Password, storedPassHash)
-	if !correct {
-		slog.Error("invalid credentials", "identification", vals.Identification)
+	if correct {
+		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	slog.Info("Successful login", "identification", vals.Identification)
 
-	// TODO: cache all this
-	teams, _ := clubhousequeries.New(action.clubhouseDB).Teams(req.Context())
-	positions, _ := clubhousequeries.New(action.clubhouseDB).Positions(req.Context())
-	personTeams, _ := clubhousequeries.New(action.clubhouseDB).PersonTeams(req.Context())
-	personPositions, _ := clubhousequeries.New(action.clubhouseDB).PersonPositions(req.Context())
-
-	var foundPositions []uint64
-	var foundPositionNames []string
-	var foundTeams []int32
-	var foundTeamNames []string
-	for _, pp := range personPositions {
-		if pp.PersonID == uint64(userID) {
-			foundPositions = append(foundPositions, pp.PositionID)
-		}
-	}
-	for _, pos := range positions {
-		if slices.Contains(foundPositions, pos.ID) {
-			foundPositionNames = append(foundPositionNames, pos.Title)
-		}
-	}
-	for _, pt := range personTeams {
-		if pt.PersonID == int32(userID) {
-			foundTeams = append(foundTeams, pt.TeamID)
-		}
-	}
-	for _, team := range teams {
-		if slices.Contains(foundTeams, int32(team.ID)) {
-			foundTeamNames = append(foundTeamNames, team.Title)
-		}
+	foundPositionNames, foundTeamNames, err := action.userStore.GetUserPositionsTeams(req.Context(), userID)
+	if err != nil {
+		slog.Error("Failed to fetch Clubhouse positions/teams data", "error", err)
+		http.Error(w, "Failed to fetch Clubhouse positions/teams data", http.StatusInternalServerError)
+		return
 	}
 
 	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
@@ -110,11 +94,62 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	mustWriteJSON(w, resp)
 }
 
+///*func (action PostAuth) positionsAndTeams(ctx context.Context, userID int64) (positionNames []string, teamNames []string, err error) {
+//	// There's no need to cache the personnel, because we only query the Clubhouse tables
+//	// on user login. JWT claims assert users' identity, positions, teams, and onsite
+//	// status in all subsequent requests. We still query PERSON on personnel calls, but
+//	// even those calls are cached on the client side.
+//
+//	positions, teams, err := action.userStore.GetUserPositionsTeams(ctx, userID)
+//
+//	//teams, err := clubhousequeries.New(action.clubhouseDB).Teams(ctx)
+//	//if err != nil {
+//	//	return nil, nil, fmt.Errorf("[Teams]: %w", err)
+//	//}
+//	//positions, err := clubhousequeries.New(action.clubhouseDB).Positions(ctx)
+//	//if err != nil {
+//	//	return nil, nil, fmt.Errorf("[Positions]: %w", err)
+//	//}
+//	//personTeams, err := clubhousequeries.New(action.clubhouseDB).PersonTeams(ctx)
+//	//if err != nil {
+//	//	return nil, nil, fmt.Errorf("[PersonTeams]: %w", err)
+//	//}
+//	//personPositions, err := clubhousequeries.New(action.clubhouseDB).PersonPositions(ctx)
+//	//if err != nil {
+//	//	return nil, nil, fmt.Errorf("[PersonPositions]: %w", err)
+//	//}
+//	//
+//	//var foundPositions []uint64
+//	//var foundPositionNames []string
+//	//var foundTeams []int32
+//	//var foundTeamNames []string
+//	//for _, pp := range personPositions {
+//	//	if pp.PersonID == uint64(userID) {
+//	//		foundPositions = append(foundPositions, pp.PositionID)
+//	//	}
+//	//}
+//	//for _, pos := range positions {
+//	//	if slices.Contains(foundPositions, pos.ID) {
+//	//		foundPositionNames = append(foundPositionNames, pos.Title)
+//	//	}
+//	//}
+//	//for _, pt := range personTeams {
+//	//	if pt.PersonID == int32(userID) {
+//	//		foundTeams = append(foundTeams, pt.TeamID)
+//	//	}
+//	//}
+//	//for _, team := range teams {
+//	//	if slices.Contains(foundTeams, int32(team.ID)) {
+//	//		foundTeamNames = append(foundTeamNames, team.Title)
+//	//	}
+//	//}
+//	//return foundPositionNames, foundTeamNames, nil
+//}*/
+
 type GetAuth struct {
-	imsDB       *store.DB
-	clubhouseDB *sql.DB
-	jwtSecret   string
-	admins      []string
+	imsDB     *store.DB
+	jwtSecret string
+	admins    []string
 }
 
 type GetAuthResponse struct {
@@ -163,7 +198,7 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		permissions, err := auth.UserPermissions2(req.Context(), event.ID, action.imsDB, action.admins, *claims)
+		eventPermissions, _, err := auth.UserPermissions2(req.Context(), &event.ID, action.imsDB, action.admins, *claims)
 		if err != nil {
 			slog.Error("Failed to compute permissions", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -172,9 +207,9 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		resp.EventAccess = map[string]AccessForEvent{
 			eventName: {
-				ReadIncidents:     permissions[auth.ReadIncidents],
-				WriteIncidents:    permissions[auth.WriteIncidents],
-				WriteFieldReports: permissions[auth.WriteFieldReports],
+				ReadIncidents:     eventPermissions[event.ID]&auth.EventReadIncidents != 0,
+				WriteIncidents:    eventPermissions[event.ID]&auth.EventWriteIncidents != 0,
+				WriteFieldReports: eventPermissions[event.ID]&auth.EventWriteAllFieldReports != 0,
 				AttachFiles:       false,
 			},
 		}

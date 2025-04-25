@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
-	"time"
 )
 
 type GetEvents struct {
@@ -22,19 +21,16 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 	ctx := req.Context()
 
-	start := time.Now()
 	eventRows, err := imsdb.New(action.imsDB).Events(ctx)
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	slog.Info("querying events took", "duration", time.Since(start))
 
 	accessRows, err := imsdb.New(action.imsDB).EventAccessAll(ctx)
 	if err != nil {
 		panic(err)
-		//return nil, fmt.Errorf("[EventAccessAll]: %w", err)
 	}
 	accessRowByEventID := make(map[int32][]imsdb.EventAccess)
 	for _, ar := range accessRows {
@@ -43,23 +39,40 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	claims := ctx.Value(JWTContextKey).(JWTContext).Claims
 
-	start = time.Now()
+	permissionsByEvent, _ := auth.UserPermissions3(
+		accessRowByEventID,
+		action.imsAdmins,
+		claims.RangerHandle(),
+		claims.RangerOnSite(),
+		claims.RangerPositions(),
+		claims.RangerTeams(),
+	)
+
 	for _, er := range eventRows {
-		perms := auth.UserPermissions(
-			accessRowByEventID[er.Event.ID],
-			action.imsAdmins,
-			claims.RangerHandle(),
-			claims.RangerOnSite(),
-			claims.RangerPositions(),
-			claims.RangerTeams(),
-		)
-		if perms[auth.ReadEventName] {
+		if permissionsByEvent[er.Event.ID]&auth.EventReadEventName != 0 {
 			resp = append(resp, imsjson.Event{
 				ID:   er.Event.ID,
 				Name: er.Event.Name,
 			})
 		}
 	}
+	//
+	//for _, er := range eventRows {
+	//	perms := auth.UserPermissions(
+	//		accessRowByEventID[er.Event.ID],
+	//		action.imsAdmins,
+	//		claims.RangerHandle(),
+	//		claims.RangerOnSite(),
+	//		claims.RangerPositions(),
+	//		claims.RangerTeams(),
+	//	)
+	//	if perms[auth.EventReadEventName] {
+	//		resp = append(resp, imsjson.Event{
+	//			ID:   er.Event.ID,
+	//			Name: er.Event.Name,
+	//		})
+	//	}
+	//}
 
 	slices.SortFunc(resp, func(a, b imsjson.Event) int {
 		return cmp.Compare(a.ID, b.ID)

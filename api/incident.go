@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
@@ -22,15 +23,24 @@ type GetIncidents struct {
 }
 
 func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if !mustParseForm(w, req) {
+	perms, ok := mustGetPermissionsCtx(w, req)
+	if !ok {
 		return
 	}
-	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
-
 	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
+	if perms.EventPermissions[event.ID]&auth.EventReadIncidents == 0 {
+		slog.Error("The requestor does not have EventReadIncidents permission on this Event")
+		http.Error(w, "The requestor does not have EventReadIncidents permission on this Event", http.StatusForbidden)
+		return
+	}
+
+	if !mustParseForm(w, req) {
+		return
+	}
+	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
 	reportEntries, err := imsdb.New(action.imsDB).Incidents_ReportEntries(req.Context(),
 		imsdb.Incidents_ReportEntriesParams{
@@ -127,48 +137,34 @@ type GetIncident struct {
 }
 
 func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
+	perms, ok := mustGetPermissionsCtx(w, req)
+	if !ok {
+		return
+	}
 	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
 	}
-	incident := req.PathValue("incidentNumber")
+	if perms.EventPermissions[event.ID]&auth.EventReadIncidents == 0 {
+		slog.Error("The requestor does not have EventReadIncidents permission on this Event")
+		http.Error(w, "The requestor does not have EventReadIncidents permission on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
 
-	incidentNumber, err := strconv.ParseInt(incident, 10, 32)
+	incidentNumber, err := strconv.ParseInt(req.PathValue("incidentNumber"), 10, 32)
 	if err != nil {
 		slog.Error("Got nonnumeric incident number", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	r, reportEntries, err := fetchIncident(ctx, action.imsDB, event.ID, int32(incidentNumber))
+	storedRow, reportEntries, err := fetchIncident(ctx, action.imsDB, event.ID, int32(incidentNumber))
 	if err != nil {
 		slog.Error("Failed to read incident", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	//r, err := imsdb.New(action.imsDB).Incident(req.Context(), imsdb.IncidentParams{
-	//	Event:  event.ID,
-	//	Number: int32(incidentNumber),
-	//})
-	//if err != nil {
-	//	slog.Error("Failed to read incident", "error", err)
-	//	w.WriteHeader(http.StatusInternalServerError)
-	//	return
-	//}
-	//
-	//reportEntries, err := imsdb.New(action.imsDB).Incident_ReportEntries(req.Context(),
-	//	imsdb.Incident_ReportEntriesParams{
-	//		Event:          event.ID,
-	//		IncidentNumber: int32(incidentNumber),
-	//	},
-	//)
-	//if err != nil {
-	//	w.WriteHeader(http.StatusInternalServerError)
-	//	log.Println(err)
-	//	return
-	//}
 
 	resultEntries := make([]imsjson.ReportEntry, 0)
 	for _, re := range reportEntries {
@@ -188,26 +184,26 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var incidentTypes imsjson.IncidentTypes
 	var rangerHandles []string
 	var fieldReportNumbers []int32
-	json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
-	json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
-	json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
+	json.Unmarshal(storedRow.IncidentTypes.([]byte), &incidentTypes)
+	json.Unmarshal(storedRow.RangerHandles.([]byte), &rangerHandles)
+	json.Unmarshal(storedRow.FieldReportNumbers.([]byte), &fieldReportNumbers)
 
 	var garett = "garett"
 	result := imsjson.Incident{
 		Event:   event.Name,
-		Number:  r.Incident.Number,
-		Created: time.Unix(int64(r.Incident.Created), 0),
+		Number:  storedRow.Incident.Number,
+		Created: time.Unix(int64(storedRow.Incident.Created), 0),
 		// TODO: should look at report entries too
-		LastModified: time.Unix(int64(r.Incident.Created), 0),
-		State:        string(r.Incident.State),
-		Priority:     r.Incident.Priority,
-		Summary:      stringOrNil(r.Incident.Summary),
+		LastModified: time.Unix(int64(storedRow.Incident.Created), 0),
+		State:        string(storedRow.Incident.State),
+		Priority:     storedRow.Incident.Priority,
+		Summary:      stringOrNil(storedRow.Incident.Summary),
 		Location: imsjson.Location{
-			Name:         ptr(r.Incident.LocationName.String),
-			Concentric:   ptr(r.Incident.LocationConcentric.String),
-			RadialHour:   formatInt16(r.Incident.LocationRadialHour),
-			RadialMinute: formatInt16(r.Incident.LocationRadialMinute),
-			Description:  ptr(r.Incident.LocationDescription.String),
+			Name:         ptr(storedRow.Incident.LocationName.String),
+			Concentric:   ptr(storedRow.Incident.LocationConcentric.String),
+			RadialHour:   formatInt16(storedRow.Incident.LocationRadialHour),
+			RadialMinute: formatInt16(storedRow.Incident.LocationRadialMinute),
+			Description:  ptr(storedRow.Incident.LocationDescription.String),
 			Type:         garett,
 		},
 		IncidentTypes: &incidentTypes,
@@ -219,7 +215,9 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	mustWriteJSON(w, result)
 }
 
-func fetchIncident(ctx context.Context, imsDB *store.DB, eventID, incidentNumber int32) (incident imsdb.IncidentRow, reportEntries []imsdb.ReportEntry, err error) {
+func fetchIncident(ctx context.Context, imsDB *store.DB, eventID, incidentNumber int32) (
+	incident imsdb.IncidentRow, reportEntries []imsdb.ReportEntry, err error,
+) {
 	//var incidentTypes imsjson.IncidentTypes
 	//var rangerHandles []string
 	//var fieldReportNumbers []int32
@@ -244,22 +242,6 @@ func fetchIncident(ctx context.Context, imsDB *store.DB, eventID, incidentNumber
 	for _, rer := range reportEntryRows {
 		reportEntries = append(reportEntries, rer.ReportEntry)
 	}
-
-	//resultEntries := make([]imsjson.ReportEntry, 0)
-	//for _, entry := range reportEntries {
-	//	re := entry.ReportEntry
-	//	resultEntries = append(resultEntries,
-	//		imsjson.ReportEntry{
-	//			ID:            re.ID,
-	//			Created:       time.Unix(int64(re.Created), 0),
-	//			Author:        re.Author,
-	//			SystemEntry:   re.Generated,
-	//			Text:          re.Text,
-	//			Stricken:      re.Stricken,
-	//			HasAttachment: re.AttachedFile.String != "",
-	//		},
-	//	)
-	//}
 
 	return incidentRow, reportEntries, nil
 

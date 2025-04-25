@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"maps"
 	"slices"
 	"strings"
 )
@@ -20,92 +19,122 @@ const (
 	Administrator        Role = "Administrator"
 )
 
-type Permission string
+type GlobalPermissionMask uint16
+type EventPermissionMask uint16
 
 const (
 	// Event-specific permissions
 
-	ReadIncidents     Permission = "ReadIncidents"
-	WriteIncidents    Permission = "WriteIncidents"
-	ReadFieldReports  Permission = "ReadFieldReports"
-	WriteFieldReports Permission = "WriteFieldReports"
-	ReadEventName     Permission = "ReadEventName"
-	ReadEventStreets  Permission = "ReadEventStreets"
-
-	// Permissions that aren't event-specific
-
-	ReadIncidentTypes         Permission = "ReadIncidentTypes"
-	ReadPersonnel             Permission = "ReadPersonnel"
-	AdministrateEvents        Permission = "AdministrateEvents"
-	AdministrateStreets       Permission = "AdministrateStreets"
-	AdministrateIncidentTypes Permission = "AdministrateIncidentTypes"
+	EventReadIncidents EventPermissionMask = 1 << iota
+	EventWriteIncidents
+	EventReadAllFieldReports
+	EventReadOwnFieldReports
+	EventWriteAllFieldReports
+	EventWriteOwnFieldReports
+	EventReadEventName
 )
 
-var RolesToPerms = map[Role]map[Permission]bool{
-	AnyAuthenticatedUser: {
-		ReadIncidentTypes: true,
-		ReadPersonnel:     true,
-	},
-	EventReporter: {
-		ReadEventName:     true,
-		ReadIncidentTypes: true,
-		ReadEventStreets:  true,
-		ReadFieldReports:  true,
-		WriteFieldReports: true,
-	},
-	EventReader: {
-		ReadEventName:     true,
-		ReadEventStreets:  true,
-		ReadIncidents:     true,
-		ReadIncidentTypes: true,
-		ReadFieldReports:  true,
-		ReadPersonnel:     true,
-	},
-	EventWriter: {
-		ReadEventName:     true,
-		ReadEventStreets:  true,
-		ReadIncidents:     true,
-		ReadIncidentTypes: true,
-		WriteIncidents:    true,
-		ReadFieldReports:  true,
-		WriteFieldReports: true,
-		ReadPersonnel:     true,
-	},
-	Administrator: {
-		AdministrateEvents:        true,
-		AdministrateStreets:       true,
-		AdministrateIncidentTypes: true,
-	},
+const (
+	// Permissions that aren't event-specific
+
+	GlobalListEventNames GlobalPermissionMask = 1 << iota
+	GlobalReadIncidentTypes
+	GlobalReadStreets
+	GlobalReadPersonnel
+	GlobalAdministrateEvents
+	GlobalAdministrateStreets
+	GlobalAdministrateIncidentTypes
+)
+
+//var RolesToGlobalPerms = map[Role]map[GlobalPermissionMask]bool{
+//	AnyAuthenticatedUser: {
+//		GlobalListEventNames:        true,
+//		GlobalReadIncidentTypes: true,
+//		GlobalReadPersonnel:     true,
+//		GlobalReadStreets:       true,
+//	},
+//	Administrator: {
+//		GlobalAdministrateEvents:        true,
+//		GlobalAdministrateStreets:       true,
+//		GlobalAdministrateIncidentTypes: true,
+//	},
+//}
+
+var RolesToGlobalPerms = map[Role]GlobalPermissionMask{
+	AnyAuthenticatedUser: GlobalListEventNames | GlobalReadIncidentTypes | GlobalReadPersonnel | GlobalReadStreets,
+	Administrator:        GlobalAdministrateEvents | GlobalAdministrateStreets | GlobalAdministrateIncidentTypes,
 }
+
+var RolesToEventPerms = map[Role]EventPermissionMask{
+	//AnyAuthenticatedUser: {
+	//	GlobalReadIncidentTypes: true,
+	//	GlobalReadPersonnel:     true,
+	//	GlobalReadStreets:       true,
+	//},
+	EventReporter: EventReadEventName | EventReadOwnFieldReports | EventWriteOwnFieldReports,
+	EventReader:   EventReadEventName | EventReadIncidents | EventReadOwnFieldReports | EventReadAllFieldReports,
+	EventWriter:   EventReadEventName | EventReadIncidents | EventWriteIncidents | EventReadAllFieldReports | EventReadOwnFieldReports | EventWriteAllFieldReports | EventWriteOwnFieldReports,
+}
+
+//var RolesToPerms = map[Role]map[EventPermissionMask]bool{
+//	//AnyAuthenticatedUser: {
+//	//	GlobalReadIncidentTypes: true,
+//	//	GlobalReadPersonnel:     true,
+//	//	GlobalReadStreets:       true,
+//	//},
+//	EventReporter: {
+//		EventReadEventName:        true,
+//		EventReadOwnFieldReports:  true,
+//		EventWriteOwnFieldReports: true,
+//	},
+//	EventReader: {
+//		EventReadEventName:       true,
+//		EventReadIncidents:       true,
+//		EventReadOwnFieldReports: true,
+//		EventReadAllFieldReports: true,
+//	},
+//	EventWriter: {
+//		EventReadEventName:        true,
+//		EventReadIncidents:        true,
+//		EventWriteIncidents:       true,
+//		EventReadAllFieldReports:  true,
+//		EventReadOwnFieldReports:  true,
+//		EventWriteAllFieldReports: true,
+//		EventWriteOwnFieldReports: true,
+//	},
+//}
 
 func UserPermissions2(
 	ctx context.Context,
-	eventID int32, // or 0 for no event
+	eventID *int32, // nil for no event
 	imsDB *store.DB,
 	imsAdmins []string,
 	claims IMSClaims,
-) (map[Permission]bool, error) {
-	var eventAccesses []imsdb.EventAccess
-	if eventID != 0 {
-		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventID)
+) (eventPermissions map[int32]EventPermissionMask, globalPermissions GlobalPermissionMask, err error) {
+	accessByEvent := make(map[int32][]imsdb.EventAccess)
+	if eventID != nil {
+		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, *eventID)
 		if err != nil {
-			return nil, fmt.Errorf("EventAccess: %w", err)
+			return nil, 0, fmt.Errorf("EventAccess: %w", err)
 		}
 		for _, ea := range accessRows {
-			eventAccesses = append(eventAccesses, ea.EventAccess)
+			accessByEvent[*eventID] = append(accessByEvent[*eventID], ea.EventAccess)
 		}
 	}
-	permissions := UserPermissions(eventAccesses, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
-	return permissions, nil
+	eventPermissions, globalPermissions = UserPermissions3(accessByEvent, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+	return eventPermissions, globalPermissions, nil
 }
 
-func UserPermissions(
-	eventAccesses []imsdb.EventAccess, // all for the same event, or nil for no event
+func UserPermissions3(
+	accessByEvent map[int32][]imsdb.EventAccess, // eventID to event accesses
 	imsAdmins []string,
 	handle string,
 	onsite bool,
 	positions, teams []string,
-) map[Permission]bool {
+) (eventPermissions map[int32]EventPermissionMask, globalPermissions GlobalPermissionMask) {
+
+	eventPermissions = make(map[int32]EventPermissionMask)
+	globalPermissions = 0
 
 	translate := map[imsdb.EventAccessMode]Role{
 		imsdb.EventAccessModeRead:   EventReader,
@@ -113,43 +142,45 @@ func UserPermissions(
 		imsdb.EventAccessModeReport: EventReporter,
 	}
 
-	perms := make(map[Permission]bool)
-
 	if handle != "" {
-		maps.Copy(perms, RolesToPerms[AnyAuthenticatedUser])
+		globalPermissions |= RolesToGlobalPerms[AnyAuthenticatedUser]
 	}
 
 	if slices.Contains(imsAdmins, handle) {
-		maps.Copy(perms, RolesToPerms[Administrator])
+		globalPermissions |= RolesToGlobalPerms[Administrator]
 	}
 
-	for _, ea := range eventAccesses {
-		matchExpr := false
-		if ea.Expression == "*" {
-			matchExpr = true
-		}
-		if strings.HasPrefix(ea.Expression, "person:") &&
-			strings.TrimPrefix(ea.Expression, "person:") == handle {
-			matchExpr = true
-		}
-		if strings.HasPrefix(ea.Expression, "position:") &&
-			slices.Contains(positions, strings.TrimPrefix(ea.Expression, "position:")) {
-			matchExpr = true
-		}
-		if strings.HasPrefix(ea.Expression, "team:") &&
-			slices.Contains(teams, strings.TrimPrefix(ea.Expression, "team:")) {
-			matchExpr = true
-		}
-		matchValidity := false
-		if ea.Validity == imsdb.EventAccessValidityAlways {
-			matchValidity = true
-		}
-		if ea.Validity == imsdb.EventAccessValidityOnsite && onsite {
-			matchValidity = true
-		}
-		if matchExpr && matchValidity {
-			maps.Copy(perms, RolesToPerms[translate[ea.Mode]])
+	for eventID, accesses := range accessByEvent {
+		eventPermissions[eventID] = 0 // make(map[EventPermissionMask]bool)
+		for _, ea := range accesses {
+			matchExpr := false
+			if ea.Expression == "*" {
+				matchExpr = true
+			}
+			if strings.HasPrefix(ea.Expression, "person:") &&
+				strings.TrimPrefix(ea.Expression, "person:") == handle {
+				matchExpr = true
+			}
+			if strings.HasPrefix(ea.Expression, "position:") &&
+				slices.Contains(positions, strings.TrimPrefix(ea.Expression, "position:")) {
+				matchExpr = true
+			}
+			if strings.HasPrefix(ea.Expression, "team:") &&
+				slices.Contains(teams, strings.TrimPrefix(ea.Expression, "team:")) {
+				matchExpr = true
+			}
+			matchValidity := false
+			if ea.Validity == imsdb.EventAccessValidityAlways {
+				matchValidity = true
+			}
+			if ea.Validity == imsdb.EventAccessValidityOnsite && onsite {
+				matchValidity = true
+			}
+			if matchExpr && matchValidity {
+				eventPermissions[eventID] |= RolesToEventPerms[translate[ea.Mode]]
+				//maps.Copy(eventPermissions[eventID], RolesToPerms[translate[ea.Mode]])
+			}
 		}
 	}
-	return perms
+	return eventPermissions, globalPermissions
 }

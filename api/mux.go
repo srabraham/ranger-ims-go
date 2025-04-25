@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
+	"github.com/srabraham/ranger-ims-go/directory"
 	"github.com/srabraham/ranger-ims-go/store"
 	"log/slog"
 	"net/http"
 	"time"
 )
 
-func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB *sql.DB) *http.ServeMux {
+func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *directory.UserStore) *http.ServeMux {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
@@ -26,7 +27,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -36,7 +37,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -44,23 +45,22 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 		Adapt(
 			PostAuth{
 				imsDB:       db,
-				clubhouseDB: clubhouseDB,
+				userStore:   userStore,
 				jwtSecret:   cfg.Core.JWTSecret,
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 			},
 			LogBeforeAfter(),
 		),
 		// This endpoint does not require authentication, nor
-		// should it even consider current Authorization header.
+		// should it even consider the request's Authorization header.
 	)
 
 	mux.Handle("GET /ims/api/auth",
 		Adapt(
 			GetAuth{
-				imsDB:       db,
-				clubhouseDB: clubhouseDB,
-				jwtSecret:   cfg.Core.JWTSecret,
-				admins:      cfg.Core.Admins,
+				imsDB:     db,
+				jwtSecret: cfg.Core.JWTSecret,
+				admins:    cfg.Core.Admins,
 			},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
@@ -74,7 +74,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
+			ExtractPermissionsToContext(db, cfg.Core.Admins),
+			//RequireEventPermission(auth.EventReadIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -84,7 +85,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteIncidents, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -94,7 +95,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadIncidents, db, cfg.Core.Admins),
+			ExtractPermissionsToContext(db, cfg.Core.Admins),
+			//RequireEventPermission(auth.EventReadIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -104,7 +106,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteIncidents, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -114,7 +116,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteIncidents, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -124,7 +126,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventReadAllFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
@@ -134,7 +136,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteFieldReports, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
@@ -144,7 +146,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadFieldReports, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventReadAllFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
@@ -154,7 +156,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteFieldReports, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
@@ -164,7 +166,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.WriteFieldReports, db, cfg.Core.Admins),
+			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
 		),
 	)
 
@@ -175,7 +177,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
 			// ugh, no eventname in path
-			//RequireAuthorization(auth.ReadEventName, db, cfg.Core.Admins),
+			//RequireEventPermission(auth.EventReadEventName, db, cfg.Core.Admins),
 		),
 	)
 
@@ -185,7 +187,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.AdministrateEvents, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
 
@@ -195,8 +197,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			// ugh, no eventname in path
-			//RequireAuthorization(auth.ReadEventStreets, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalReadStreets, db, cfg.Core.Admins),
 		),
 	)
 
@@ -206,7 +207,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.AdministrateStreets, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalAdministrateStreets, db, cfg.Core.Admins),
 		),
 	)
 
@@ -216,7 +217,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadIncidentTypes, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalReadIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
 
@@ -226,17 +227,17 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, clubhouseDB
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.AdministrateIncidentTypes, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalAdministrateIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
 
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
-			GetPersonnel{clubhouseDB: clubhouseDB},
+			GetPersonnel{userStore: userStore},
 			LogBeforeAfter(),
 			ExtractClaimsToContext(j),
 			RequireAuthenticated(),
-			RequireAuthorization(auth.ReadPersonnel, db, cfg.Core.Admins),
+			RequireGlobalPermission(auth.GlobalReadPersonnel, db, cfg.Core.Admins),
 		),
 	)
 
@@ -286,9 +287,9 @@ type Adapter func(http.Handler) http.Handler
 func LogBeforeAfter() Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			//start := time.Now()
+			start := time.Now()
 			next.ServeHTTP(w, r)
-			//slog.Info("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
+			slog.Debug("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }
@@ -298,9 +299,15 @@ type ContextKey string
 const JWTContextKey ContextKey = "JWTContext"
 
 type JWTContext struct {
-	Claims            *auth.IMSClaims
-	AuthenticatedUser string
-	Error             error
+	Claims *auth.IMSClaims
+	Error  error
+}
+
+const PermissionsContextKey ContextKey = "PermissionsContext"
+
+type PermissionsContext struct {
+	EventPermissions  map[int32]auth.EventPermissionMask
+	GlobalPermissions auth.GlobalPermissionMask
 }
 
 func ExtractClaimsToContext(j auth.JWTer) Adapter {
@@ -308,14 +315,9 @@ func ExtractClaimsToContext(j auth.JWTer) Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			claims, err := j.AuthenticateJWT(header)
-			handle := ""
-			if claims != nil {
-				handle = claims.RangerHandle()
-			}
 			ctx := context.WithValue(r.Context(), JWTContextKey, JWTContext{
-				Claims:            claims,
-				AuthenticatedUser: handle,
-				Error:             err,
+				Claims: claims,
+				Error:  err,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -347,36 +349,89 @@ func RequireAuthenticated() Adapter {
 	}
 }
 
-func RequireAuthorization(required auth.Permission, imsDB *store.DB, imsAdmins []string) Adapter {
+func ExtractPermissionsToContext(imsDB *store.DB, imsAdmins []string) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
-			if !found {
-				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
-				http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
-					http.StatusInternalServerError)
+			jwtCtx, ok := mustGetJwtCtx(w, r)
+			if !ok {
 				return
 			}
-
-			var eventID int32
+			var eventID *int32
 			if r.PathValue("eventName") != "" {
 				event, ok := mustGetEvent(w, r, r.PathValue("eventName"), imsDB)
 				if !ok {
 					return
 				}
-				eventID = event.ID
+				eventID = &event.ID
 			}
 
 			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
-			permissions, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
+			eventPermissions, globalPermissions, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
 			if err != nil {
 				slog.Error("Failed to compute permissions", "error", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			if !permissions[required] {
-				w.WriteHeader(http.StatusUnauthorized)
+			ctx := context.WithValue(r.Context(), PermissionsContextKey, PermissionsContext{
+				EventPermissions:  eventPermissions,
+				GlobalPermissions: globalPermissions,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func RequireEventPermission(required auth.EventPermissionMask, imsDB *store.DB, imsAdmins []string) Adapter {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			jwtCtx, ok := mustGetJwtCtx(w, r)
+			if !ok {
+				return
+			}
+			var eventID *int32
+			if r.PathValue("eventName") != "" {
+				event, ok := mustGetEvent(w, r, r.PathValue("eventName"), imsDB)
+				if !ok {
+					return
+				}
+				eventID = &event.ID
+			}
+
+			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
+			eventPermissions, _, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
+			if err != nil {
+				slog.Error("Failed to compute permissions", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if eventID == nil || eventPermissions[*eventID]&required == 0 {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RequireGlobalPermission(required auth.GlobalPermissionMask, imsDB *store.DB, imsAdmins []string) Adapter {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			jwtCtx, ok := mustGetJwtCtx(w, r)
+			if !ok {
+				return
+			}
+
+			_, globalPermissions, err := auth.UserPermissions2(r.Context(), nil, imsDB, imsAdmins, *jwtCtx.Claims)
+			if err != nil {
+				slog.Error("Failed to compute permissions", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if globalPermissions&required == 0 {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}
 			next.ServeHTTP(w, r)

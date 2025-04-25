@@ -68,6 +68,7 @@ func setup(ctx context.Context) {
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
 			Started:          true,
+			// This logging is useful for debugging container startup issues
 			//Logger:           log.New(os.Stdout, "MariaDB ", log.LstdFlags),
 		},
 	)

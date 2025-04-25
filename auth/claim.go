@@ -62,19 +62,21 @@ func (c IMSClaims) WithRangerTeams(teams ...string) IMSClaims {
 }
 
 func (c IMSClaims) RangerHandle() string {
-	return c.MapClaims[handleKey].(string)
+	rh, _ := c.MapClaims[handleKey].(string)
+	return rh
 }
 
 func (c IMSClaims) RangerOnSite() bool {
-	return c.MapClaims[onsiteKey].(bool)
+	onsite, _ := c.MapClaims[onsiteKey].(bool)
+	return onsite
 }
 
 func (c IMSClaims) RangerPositions() []string {
-	positions := c.MapClaims[positionsKey].(string)
+	positions, _ := c.MapClaims[positionsKey].(string)
 	return strings.Split(positions, ",")
 }
 
 func (c IMSClaims) RangerTeams() []string {
-	teams := c.MapClaims[teamsKey].(string)
+	teams, _ := c.MapClaims[teamsKey].(string)
 	return strings.Split(teams, ",")
 }

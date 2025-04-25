@@ -442,7 +442,6 @@ function concentricStreetFromID(streetID) {
     }
     const name = concentricStreetNameByID[streetID];
     if (name == null) {
-        console.warn("Unknown street ID: " + streetID);
         return "";
     }
     return name;

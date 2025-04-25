@@ -75,5 +75,5 @@ func logQuery(s string, start time.Time, err error) {
 	queryName, _, _ := strings.Cut(s, "\n")
 	queryName = strings.TrimPrefix(queryName, "-- name: ")
 	// time.Since(start).Round(1*time.Microsecond)
-	slog.Debug("Query", "time (ms)", time.Since(start).Milliseconds(), "query", queryName, "err", err)
+	slog.Debug("Query", "millis", time.Since(start).Milliseconds(), "query", queryName, "err", err)
 }

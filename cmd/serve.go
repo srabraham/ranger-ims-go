@@ -1,10 +1,6 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/srabraham/ranger-ims-go/api"
@@ -21,27 +17,35 @@ import (
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Launch the IMS server",
+	Long: "Launch the IMS server\n\n" +
+		"Configuration will be read from conf/imsd.toml, and can be overridden by environment variables.",
 	Run: runServer,
 }
 
 func runServer(cmd *cobra.Command, args []string) {
+	var logLevel slog.Level
+	must(logLevel.UnmarshalText([]byte(conf.Cfg.Core.LogLevel)))
+	slog.SetLogLoggerLevel(logLevel)
 
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	log.Printf("Have config\n%v", conf.Cfg)
 
+	var userStore *directory.UserStore
+	var err error
+	switch conf.Cfg.Core.Directory {
+	case conf.DirectoryTypeClubhouseDB:
+		userStore, err = directory.NewUserStore(nil, directory.MariaDB())
+	case conf.DirectoryTypeTestUsers:
+		userStore, err = directory.NewUserStore(conf.Cfg.Directory.TestUsers, nil)
+	default:
+		err = fmt.Errorf("unknown directory %v", conf.Cfg.Core.Directory)
+	}
+	must(err)
 	imsDB := store.MariaDB(conf.Cfg)
-	clubhouseDB := directory.MariaDB()
 
 	mux := http.NewServeMux()
-	api.AddToMux(mux, conf.Cfg, &store.DB{DB: imsDB}, clubhouseDB)
+	api.AddToMux(mux, conf.Cfg, &store.DB{DB: imsDB}, userStore)
 	web.AddToMux(mux, conf.Cfg)
-	//mux := api.CreateMux(context.Background(), imsDB, clubhouseDB)
 
 	addr := fmt.Sprintf("%v:%v", conf.Cfg.Core.Host, conf.Cfg.Core.Port)
 	s := &http.Server{
@@ -54,15 +58,8 @@ func runServer(cmd *cobra.Command, args []string) {
 		WriteTimeout:   30 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 	}
-	log.Printf("I'm listening %v", addr)
+	slog.Info("IMS server up-and-running", "address", addr)
 	log.Fatal(s.ListenAndServe())
-}
-
-func valOrNil(v sql.NullInt16) *int16 {
-	if v.Valid {
-		return &v.Int16
-	}
-	return nil
 }
 
 func init() {
