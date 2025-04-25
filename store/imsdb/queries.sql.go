@@ -471,6 +471,44 @@ func (q *Queries) EventAccess(ctx context.Context, event int32) ([]EventAccessRo
 	return items, nil
 }
 
+const eventAccessAll = `-- name: EventAccessAll :many
+select ea.id, ea.event, ea.expression, ea.mode, ea.validity
+from EVENT_ACCESS ea
+`
+
+type EventAccessAllRow struct {
+	EventAccess EventAccess
+}
+
+func (q *Queries) EventAccessAll(ctx context.Context) ([]EventAccessAllRow, error) {
+	rows, err := q.db.QueryContext(ctx, eventAccessAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EventAccessAllRow
+	for rows.Next() {
+		var i EventAccessAllRow
+		if err := rows.Scan(
+			&i.EventAccess.ID,
+			&i.EventAccess.Event,
+			&i.EventAccess.Expression,
+			&i.EventAccess.Mode,
+			&i.EventAccess.Validity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const events = `-- name: Events :many
 select e.id, e.name from EVENT e
 `

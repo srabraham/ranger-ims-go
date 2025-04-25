@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
@@ -32,7 +33,9 @@ func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Reques
 func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsjson.EventsAccess, error) {
 	result := make(imsjson.EventsAccess)
 
-	allEventRows, err := imsdb.New(imsDB).Events(ctx)
+	dbtx := store.TimedDBTX{DB: imsDB}
+
+	allEventRows, err := imsdb.New(dbtx).Events(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("[Events]: %w", err)
 	}
@@ -41,18 +44,27 @@ func GetEventsAccess(ctx context.Context, imsDB *sql.DB, eventName string) (imsj
 		storedEvents = append(storedEvents, aer.Event)
 	}
 
+	accessRows, err := imsdb.New(dbtx).EventAccessAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("[EventAccessAll]: %w", err)
+	}
+	accessRowByEventID := make(map[int32][]imsdb.EventAccess)
+	for _, ar := range accessRows {
+		accessRowByEventID[ar.EventAccess.Event] = append(accessRowByEventID[ar.EventAccess.Event], ar.EventAccess)
+	}
+
 	for _, e := range storedEvents {
-		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, e.ID)
-		if err != nil {
-			return nil, fmt.Errorf("[EventAccess]: %w", err)
-		}
+		//accessRows, err := imsdb.New(dbtx).EventAccess(ctx, e.ID)
+		//if err != nil {
+		//	return nil, fmt.Errorf("[EventAccess]: %w", err)
+		//}
 		ea := imsjson.EventAccess{
 			Readers:   []imsjson.AccessRule{},
 			Writers:   []imsjson.AccessRule{},
 			Reporters: []imsjson.AccessRule{},
 		}
-		for _, accessRow := range accessRows {
-			access := accessRow.EventAccess
+		for _, accessRow := range accessRowByEventID[e.ID] {
+			access := accessRow
 			rule := imsjson.AccessRule{Expression: access.Expression, Validity: string(access.Validity)}
 			switch access.Mode {
 			case imsdb.EventAccessModeRead:
@@ -112,10 +124,11 @@ func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Ev
 
 	txn, err := action.imsDB.BeginTx(ctx, nil)
 	defer txn.Rollback()
+
 	if err != nil {
 		return fmt.Errorf("[BeginTx]: %w", err)
 	}
-	err = imsdb.New(action.imsDB).WithTx(txn).ClearEventAccessForMode(ctx, imsdb.ClearEventAccessForModeParams{
+	err = imsdb.New(txn).ClearEventAccessForMode(ctx, imsdb.ClearEventAccessForModeParams{
 		Event: event.ID,
 		Mode:  mode,
 	})
@@ -123,14 +136,14 @@ func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Ev
 		return fmt.Errorf("[ClearEventAccessForMode]: %w", err)
 	}
 	for _, rule := range rules {
-		err = imsdb.New(action.imsDB).WithTx(txn).ClearEventAccessForExpression(ctx, imsdb.ClearEventAccessForExpressionParams{
+		err = imsdb.New(txn).ClearEventAccessForExpression(ctx, imsdb.ClearEventAccessForExpressionParams{
 			Event:      event.ID,
 			Expression: rule.Expression,
 		})
 		if err != nil {
 			return fmt.Errorf("[ClearEventAccessForExpression]: %w", err)
 		}
-		_, err = imsdb.New(action.imsDB).WithTx(txn).AddEventAccess(ctx, imsdb.AddEventAccessParams{
+		_, err = imsdb.New(txn).AddEventAccess(ctx, imsdb.AddEventAccessParams{
 			Event:      event.ID,
 			Expression: rule.Expression,
 			Mode:       mode,

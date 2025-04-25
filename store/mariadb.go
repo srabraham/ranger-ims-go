@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -34,4 +35,40 @@ func MariaDB(imsCfg *conf.IMSConfig) *sql.DB {
 	}
 	slog.Info("Connected to IMS MariaDB")
 	return db
+}
+
+type TimedDBTX struct {
+	*sql.DB
+}
+
+func (l TimedDBTX) ExecContext(ctx context.Context, s string, i ...interface{}) (sql.Result, error) {
+	//start := time.Now()
+	//defer func() {
+	//	slog.Info("ExecContext complete", "s", s, "time", time.Since(start))
+	//}()
+	return l.DB.ExecContext(ctx, s, i...)
+}
+
+func (l TimedDBTX) PrepareContext(ctx context.Context, s string) (*sql.Stmt, error) {
+	//start := time.Now()
+	//defer func() {
+	//	slog.Info("PrepareContext complete", "s", s, "time", time.Since(start))
+	//}()
+	return l.DB.PrepareContext(ctx, s)
+}
+
+func (l TimedDBTX) QueryContext(ctx context.Context, s string, i ...interface{}) (*sql.Rows, error) {
+	//start := time.Now()
+	//defer func() {
+	//	slog.Info("QueryContext complete", "s", s, "time", time.Since(start))
+	//}()
+	return l.DB.QueryContext(ctx, s, i...)
+}
+
+func (l TimedDBTX) QueryRowContext(ctx context.Context, s string, i ...interface{}) *sql.Row {
+	//start := time.Now()
+	//defer func() {
+	//	slog.Info("QueryRowContext complete", "s", s, "time", time.Since(start))
+	//}()
+	return l.DB.QueryRowContext(ctx, s, i...)
 }

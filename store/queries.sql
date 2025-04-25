@@ -15,6 +15,11 @@ select sqlc.embed(ea)
 from EVENT_ACCESS ea
 where ea.EVENT = ?;
 
+-- name: EventAccessAll :many
+select sqlc.embed(ea)
+from EVENT_ACCESS ea
+;
+
 -- name: ClearEventAccessForMode :exec
 delete from EVENT_ACCESS
 where EVENT = ? and MODE = ?;

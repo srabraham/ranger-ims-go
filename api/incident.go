@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"golang.org/x/exp/slices"
 	"log"
@@ -31,7 +32,9 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reportEntries, err := imsdb.New(action.imsDB).Incidents_ReportEntries(req.Context(),
+	dbtx := store.TimedDBTX{DB: action.imsDB}
+
+	reportEntries, err := imsdb.New(dbtx).Incidents_ReportEntries(req.Context(),
 		imsdb.Incidents_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
@@ -56,7 +59,7 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		})
 	}
 
-	rows, err := imsdb.New(action.imsDB).Incidents(req.Context(), event.ID)
+	rows, err := imsdb.New(dbtx).Incidents(req.Context(), event.ID)
 	if err != nil {
 		log.Println(err)
 		return
@@ -383,7 +386,7 @@ func readExtraIncidentRowFields(row imsdb.IncidentRow) (incidentTypes, rangerHan
 
 func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newIncident imsjson.Incident, author string) error {
 
-	storedIncidentRow, err := imsdb.New(imsDB).Incident(ctx, imsdb.IncidentParams{
+	storedIncidentRow, err := imsdb.New(imsdb.DBTX(imsDB)).Incident(ctx, imsdb.IncidentParams{
 		Event:  newIncident.EventID,
 		Number: newIncident.Number,
 	})
@@ -400,7 +403,7 @@ func updateIncident(ctx context.Context, imsDB *sql.DB, es *EventSourcerer, newI
 
 	txn, _ := imsDB.Begin()
 	defer txn.Rollback()
-	dbTX := imsdb.New(imsDB).WithTx(txn)
+	dbTX := imsdb.New(imsdb.DBTX(imsDB)).WithTx(txn)
 
 	update := imsdb.UpdateIncidentParams{
 		Event:                storedIncident.Event,
@@ -597,6 +600,7 @@ type EditIncident struct {
 
 func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
+
 	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
 	if !ok {
 		return
@@ -617,23 +621,6 @@ func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
-
-	//r, err := imsdb.New(action.imsDB).Incident(req.Context(), imsdb.IncidentParams{
-	//	Event:  event.ID,
-	//	Number: int32(incidentNumber),
-	//})
-	//if err != nil {
-	//	slog.Error("Failed to read incident", "error", err)
-	//	w.WriteHeader(http.StatusInternalServerError)
-	//	return
-	//}
-	//
-	//var incidentTypes imsjson.IncidentTypes
-	//var rangerHandles []string
-	//var fieldReportNumbers []int32
-	//json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
-	//json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
-	//json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 
 	if err = updateIncident(ctx, action.imsDB, action.es, newIncident, author); err != nil {
 		slog.Error("error updating incident", "err", err)

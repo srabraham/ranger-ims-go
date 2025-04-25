@@ -30,7 +30,3 @@ func MariaDB() *sql.DB {
 	fmt.Println("Connected!")
 	return db
 }
-
-func GetAllUsers() {
-
-}

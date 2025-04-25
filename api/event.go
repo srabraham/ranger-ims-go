@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"log/slog"
 	"net/http"
@@ -22,8 +23,10 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.Events, 0)
 	ctx := req.Context()
 
+	dbtx := imsdb.New(store.TimedDBTX{DB: action.imsDB})
+
 	start := time.Now()
-	eventRows, err := imsdb.New(action.imsDB).Events(ctx)
+	eventRows, err := dbtx.Events(ctx)
 	if err != nil {
 		slog.Error("Failed to get events", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -31,22 +34,40 @@ func (action GetEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	slog.Info("querying events took", "duration", time.Since(start))
 
+	accessRows, err := dbtx.EventAccessAll(ctx)
+	if err != nil {
+		panic(err)
+		//return nil, fmt.Errorf("[EventAccessAll]: %w", err)
+	}
+	accessRowByEventID := make(map[int32][]imsdb.EventAccess)
+	for _, ar := range accessRows {
+		accessRowByEventID[ar.EventAccess.Event] = append(accessRowByEventID[ar.EventAccess.Event], ar.EventAccess)
+	}
+
 	claims := ctx.Value(JWTContextKey).(JWTContext).Claims
 
 	start = time.Now()
 	for _, er := range eventRows {
-		perms, err := auth.UserPermissions2(
-			ctx,
-			er.Event.ID,
-			action.imsDB,
+		perms := auth.UserPermissions(
+			accessRowByEventID[er.Event.ID],
 			action.imsAdmins,
-			*claims,
+			claims.RangerHandle(),
+			claims.RangerOnSite(),
+			claims.RangerPositions(),
+			claims.RangerTeams(),
 		)
-		if err != nil {
-			slog.Error("UserPermissions", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+		//perms, err := auth.UserPermissions2(
+		//	ctx,
+		//	er.Event.ID,
+		//	action.imsDB,
+		//	action.imsAdmins,
+		//	*claims,
+		//)
+		//if err != nil {
+		//	slog.Error("UserPermissions", "error", err)
+		//	w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		//}
 		if perms[auth.ReadEventName] {
 			resp = append(resp, imsjson.Event{
 				ID:   er.Event.ID,
@@ -79,6 +100,8 @@ func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	dbtx := imsdb.New(store.TimedDBTX{DB: action.imsDB})
+
 	editRequest, ok := mustReadBodyAs[imsjson.EditEventsRequest](w, req)
 	if !ok {
 		return
@@ -90,7 +113,7 @@ func (action EditEvents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "Event names must match the pattern "+allowedEventNames.String(), http.StatusBadRequest)
 			return
 		}
-		id, err := imsdb.New(action.imsDB).CreateEvent(ctx, eventName)
+		id, err := dbtx.CreateEvent(ctx, eventName)
 		if err != nil {
 			slog.Error("Failed to create event", "eventName", eventName, "error", err)
 			http.Error(w, "Failed to create event", http.StatusInternalServerError)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"maps"
 	"slices"
@@ -86,8 +87,9 @@ func UserPermissions2(
 	claims IMSClaims,
 ) (map[Permission]bool, error) {
 	var eventAccesses []imsdb.EventAccess
+	dbtx := imsdb.New(store.TimedDBTX{DB: imsDB})
 	if eventID != 0 {
-		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, eventID)
+		accessRows, err := dbtx.EventAccess(ctx, eventID)
 		if err != nil {
 			return nil, fmt.Errorf("EventAccess: %w", err)
 		}

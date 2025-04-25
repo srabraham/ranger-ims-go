@@ -75,7 +75,8 @@ func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, im
 		http.Error(w, "No eventName was provided", http.StatusInternalServerError)
 		return imsdb.Event{}, false
 	}
-	eventRow, err := imsdb.New(imsDB).QueryEventID(req.Context(), eventName)
+
+	eventRow, err := imsdb.New(imsdb.DBTX(imsDB)).QueryEventID(req.Context(), eventName)
 	if err != nil {
 		slog.Error("Failed to get event ID", "error", err)
 		http.Error(w, "Failed to get event ID", http.StatusInternalServerError)
