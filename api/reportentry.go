@@ -6,10 +6,8 @@ import (
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"log"
-	"log/slog"
 	"net/http"
-	"strconv"
+	"time"
 )
 
 type EditFieldReportReportEntry struct {
@@ -24,8 +22,7 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 		return
 	}
 	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
-		slog.Error("The requestor does not have permission to write Field Reports on this Event")
-		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to write Field Reports on this Event", nil)
 		return
 	}
 	ctx := req.Context()
@@ -36,13 +33,15 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 	if isInt32(req.PathValue("fieldReportNumber")) {
 		fieldReportNumber = toInt32(req.PathValue("fieldReportNumber"))
 	} else {
-		log.Panicf("wanted int32 FRN, got %v", req.PathValue("fieldReportNumber"))
+		handleErr(w, req, http.StatusBadRequest, "Got a nonnumeric Field Report Number", nil)
+		return
 	}
 	var reportEntryId int32
 	if isInt32(req.PathValue("reportEntryId")) {
 		reportEntryId = toInt32(req.PathValue("reportEntryId"))
 	} else {
-		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
+		handleErr(w, req, http.StatusBadRequest, "Got a nonnumeric Report Entry ID", nil)
+		return
 	}
 
 	re, ok := mustReadBodyAs[imsjson.ReportEntry](w, req)
@@ -50,19 +49,22 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 		return
 	}
 
-	txn, _ := action.imsDB.Begin()
+	txn, err := action.imsDB.Begin()
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Error starting transaction", err)
+		return
+	}
 	defer txn.Rollback()
 	dbTxn := imsdb.New(txn)
 
-	err := dbTxn.SetFieldReportReportEntryStricken(ctx, imsdb.SetFieldReportReportEntryStrickenParams{
+	err = dbTxn.SetFieldReportReportEntryStricken(ctx, imsdb.SetFieldReportReportEntryStrickenParams{
 		Stricken:          re.Stricken,
 		Event:             event.ID,
 		FieldReportNumber: fieldReportNumber,
 		ReportEntry:       reportEntryId,
 	})
 	if err != nil {
-		slog.Error("Error setting field report entry", "error", err)
-		http.Error(w, "Error setting stricken value", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error setting field report entry", err)
 		return
 	}
 	struckVerb := "Struck"
@@ -71,19 +73,17 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 	}
 	err = addFRReportEntry(ctx, dbTxn, event.ID, fieldReportNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
 	if err != nil {
-		slog.Error("Error adding report entry", "error", err)
-		http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error adding report entry", err)
 		return
 	}
 	if err = txn.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error committing transaction", err)
 		return
 	}
 
-	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+	defer action.eventSource.notifyFieldReportUpdate(event.Name, fieldReportNumber)
 
-	action.eventSource.notifyFieldReportUpdate(event.Name, fieldReportNumber)
+	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
 }
 
 type EditIncidentReportEntry struct {
@@ -98,8 +98,7 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 		return
 	}
 	if eventPermissions&(auth.EventWriteIncidents) == 0 {
-		slog.Error("The requestor does not have permission to write Report Entries on this Event")
-		http.Error(w, "The requestor does not have permission to write Report Entries on this Event", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to write Report Entries on this Event", nil)
 		return
 	}
 	ctx := req.Context()
@@ -110,13 +109,15 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 	if isInt32(req.PathValue("incidentNumber")) {
 		incidentNumber = toInt32(req.PathValue("incidentNumber"))
 	} else {
-		log.Panicf("wanted int32 IN, got %v", req.PathValue("incidentNumber"))
+		handleErr(w, req, http.StatusBadRequest, "Got a nonnumeric Incident Number", nil)
+		return
 	}
 	var reportEntryId int32
 	if isInt32(req.PathValue("reportEntryId")) {
 		reportEntryId = toInt32(req.PathValue("reportEntryId"))
 	} else {
-		log.Panicf("wanted int32 REID, got %v", req.PathValue("reportEntryId"))
+		handleErr(w, req, http.StatusBadRequest, "Got a nonnumeric Report Entry ID", nil)
+		return
 	}
 
 	re, ok := mustReadBodyAs[imsjson.ReportEntry](w, req)
@@ -124,19 +125,22 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 		return
 	}
 
-	txn, _ := action.imsDB.Begin()
+	txn, err := action.imsDB.Begin()
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Error starting transaction", err)
+		return
+	}
 	defer txn.Rollback()
 	dbTxn := imsdb.New(txn)
 
-	err := dbTxn.SetIncidentReportEntryStricken(ctx, imsdb.SetIncidentReportEntryStrickenParams{
+	err = dbTxn.SetIncidentReportEntryStricken(ctx, imsdb.SetIncidentReportEntryStrickenParams{
 		Stricken:       re.Stricken,
 		Event:          event.ID,
 		IncidentNumber: incidentNumber,
 		ReportEntry:    reportEntryId,
 	})
 	if err != nil {
-		slog.Error("Error setting incident report entry", "error", err)
-		http.Error(w, "Error setting stricken value", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error setting incident report entry", err)
 		return
 	}
 	struckVerb := "Struck"
@@ -145,27 +149,27 @@ func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http
 	}
 	err = addIncidentReportEntry(ctx, dbTxn, event.ID, incidentNumber, author, fmt.Sprintf("%v reportEntry %v", struckVerb, reportEntryId), true)
 	if err != nil {
-		slog.Error("Error adding report entry", "error", err)
-		http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error adding report entry", err)
 		return
 	}
 	if err = txn.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Error committing transaction", err)
 		return
 	}
 
+	defer action.eventSource.notifyIncidentUpdate(event.Name, incidentNumber)
+
 	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
-
-	action.eventSource.notifyIncidentUpdate(event.Name, incidentNumber)
 }
 
-func isInt32(s string) bool {
-	_, err := strconv.ParseInt(s, 10, 32)
-	return err == nil
-}
-
-func toInt32(s string) int32 {
-	i, _ := strconv.ParseInt(s, 10, 32)
-	return int32(i)
+func reportEntryToJSON(re imsdb.ReportEntry) imsjson.ReportEntry {
+	return imsjson.ReportEntry{
+		ID:            re.ID,
+		Created:       time.Unix(int64(re.Created), 0),
+		Author:        re.Author,
+		SystemEntry:   re.Generated,
+		Text:          re.Text,
+		Stricken:      re.Stricken,
+		HasAttachment: re.AttachedFile.String != "",
+	}
 }

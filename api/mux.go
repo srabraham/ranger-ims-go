@@ -17,25 +17,22 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		mux = http.NewServeMux()
 	}
 
-	j := auth.JWTer{SecretKey: cfg.Core.JWTSecret}
-
+	jwter := auth.JWTer{SecretKey: cfg.Core.JWTSecret}
 	es := NewEventSourcerer()
 
 	mux.Handle("GET /ims/api/access",
 		Adapt(
-			GetEventAccesses{imsDB: db},
+			GetEventAccesses{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("POST /ims/api/access",
 		Adapt(
-			PostEventAccess{imsDB: db},
+			PostEventAccess{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -48,9 +45,10 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 			},
 			LogBeforeAfter(),
+			// This endpoint does not require authentication, nor
+			// does it even consider the request's Authorization header,
+			// because the point of this is to make a new JWT.
 		),
-		// This endpoint does not require authentication, nor
-		// should it even consider the request's Authorization header.
 	)
 
 	mux.Handle("GET /ims/api/auth",
@@ -62,7 +60,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 			},
 			LogBeforeAfter(),
 			// This endpoint does not require authentication or authorization, by design
-			ExtractJWTOptionalAuthN(j),
+			OptionalAuthN(jwter),
 		),
 	)
 
@@ -70,7 +68,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncidents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -78,7 +76,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			NewIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -86,7 +84,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncident{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -94,7 +92,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -102,39 +100,39 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncidentReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
-			GetFieldReports{imsDB: db},
+			GetFieldReports{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports",
 		Adapt(
-			NewFieldReport{imsDB: db, eventSource: es},
+			NewFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
-			GetFieldReport{imsDB: db},
+			GetFieldReport{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
-			EditFieldReport{imsDB: db, eventSource: es},
+			EditFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -142,7 +140,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditFieldReportReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -150,9 +148,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			// ugh, no eventname in path
-			//RequireEventPermission(auth.EventReadEventName, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -160,53 +156,47 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("GET /ims/api/streets",
 		Adapt(
-			GetStreets{imsDB: db},
+			GetStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalReadStreets, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("POST /ims/api/streets",
 		Adapt(
-			EditStreets{imsDB: db},
+			EditStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalAdministrateStreets, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
-			GetIncidentTypes{imsDB: db},
+			GetIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalReadIncidentTypes, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("POST /ims/api/incident_types",
 		Adapt(
-			EditIncidentTypes{imsDB: db},
+			EditIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalAdministrateIncidentTypes, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
-			GetPersonnel{userStore: userStore},
+			GetPersonnel{imsDB: db, userStore: userStore, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractJWTRequireAuthN(j),
-			RequireGlobalPermission(auth.GlobalReadPersonnel, db, cfg.Core.Admins),
+			RequireAuthN(jwter),
 		),
 	)
 
@@ -279,7 +269,7 @@ type PermissionsContext struct {
 	GlobalPermissions auth.GlobalPermissionMask
 }
 
-func ExtractJWTOptionalAuthN(j auth.JWTer) Adapter {
+func OptionalAuthN(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -293,7 +283,7 @@ func ExtractJWTOptionalAuthN(j auth.JWTer) Adapter {
 	}
 }
 
-func ExtractJWTRequireAuthN(j auth.JWTer) Adapter {
+func RequireAuthN(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -316,105 +306,6 @@ func ExtractJWTRequireAuthN(j auth.JWTer) Adapter {
 		})
 	}
 }
-
-func ExtractPermissionsToContext(imsDB *store.DB, imsAdmins []string) Adapter {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			jwtCtx, ok := mustGetJwtCtx(w, r)
-			if !ok {
-				return
-			}
-			var eventID *int32
-			if r.PathValue("eventName") != "" {
-				event, ok := mustGetEvent(w, r, r.PathValue("eventName"), imsDB)
-				if !ok {
-					return
-				}
-				eventID = &event.ID
-			}
-
-			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
-			eventPermissions, globalPermissions, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
-			if err != nil {
-				slog.Error("Failed to compute permissions", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), PermissionsContextKey, PermissionsContext{
-				EventPermissions:  eventPermissions,
-				GlobalPermissions: globalPermissions,
-			})
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func RequireEventPermission(required auth.EventPermissionMask, imsDB *store.DB, imsAdmins []string) Adapter {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			jwtCtx, ok := mustGetJwtCtx(w, r)
-			if !ok {
-				return
-			}
-			var eventID *int32
-			if r.PathValue("eventName") != "" {
-				event, ok := mustGetEvent(w, r, r.PathValue("eventName"), imsDB)
-				if !ok {
-					return
-				}
-				eventID = &event.ID
-			}
-
-			// TODO: this doesn't consider the ?event_id value, though maybe no endpoint needs it
-			eventPermissions, _, err := auth.UserPermissions2(r.Context(), eventID, imsDB, imsAdmins, *jwtCtx.Claims)
-			if err != nil {
-				slog.Error("Failed to compute permissions", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			if eventID == nil || eventPermissions[*eventID]&required == 0 {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func RequireGlobalPermission(required auth.GlobalPermissionMask, imsDB *store.DB, imsAdmins []string) Adapter {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			jwtCtx, ok := mustGetJwtCtx(w, r)
-			if !ok {
-				return
-			}
-
-			_, globalPermissions, err := auth.UserPermissions2(r.Context(), nil, imsDB, imsAdmins, *jwtCtx.Claims)
-			if err != nil {
-				slog.Error("Failed to compute permissions", "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			if globalPermissions&required == 0 {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-//func Adapt(h http.HandlerFunc, adapters ...Adapter) http.Handler {
-//	handler := http.Handler(h)
-//	for i := range adapters {
-//		adapter := adapters[len(adapters)-1-i] // range in reverse
-//		handler = adapter(handler)
-//	}
-//	return handler
-//}
 
 func Adapt(handler http.Handler, adapters ...Adapter) http.Handler {
 	for i := range adapters {

@@ -37,7 +37,7 @@ const (
 const (
 	// Permissions that aren't event-specific
 
-	GlobalListEventNames GlobalPermissionMask = 1 << iota
+	GlobalListEvents GlobalPermissionMask = 1 << iota
 	GlobalReadIncidentTypes
 	GlobalReadStreets
 	GlobalReadPersonnel
@@ -48,7 +48,7 @@ const (
 
 //var RolesToGlobalPerms = map[Role]map[GlobalPermissionMask]bool{
 //	AnyAuthenticatedUser: {
-//		GlobalListEventNames:        true,
+//		GlobalListEvents:        true,
 //		GlobalReadIncidentTypes: true,
 //		GlobalReadPersonnel:     true,
 //		GlobalReadStreets:       true,
@@ -61,7 +61,7 @@ const (
 //}
 
 var RolesToGlobalPerms = map[Role]GlobalPermissionMask{
-	AnyAuthenticatedUser: GlobalListEventNames | GlobalReadIncidentTypes | GlobalReadPersonnel | GlobalReadStreets,
+	AnyAuthenticatedUser: GlobalListEvents | GlobalReadIncidentTypes | GlobalReadPersonnel | GlobalReadStreets,
 	Administrator:        GlobalAdministrateEvents | GlobalAdministrateStreets | GlobalAdministrateIncidentTypes,
 }
 
@@ -104,7 +104,7 @@ var RolesToEventPerms = map[Role]EventPermissionMask{
 //	},
 //}
 
-func UserPermissions2(
+func EventPermissions(
 	ctx context.Context,
 	eventID *int32, // nil for no event
 	imsDB *store.DB,
@@ -121,16 +121,18 @@ func UserPermissions2(
 			accessByEvent[*eventID] = append(accessByEvent[*eventID], ea.EventAccess)
 		}
 	}
-	eventPermissions, globalPermissions = UserPermissions3(accessByEvent, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+	//eventPermissions, globalPermissions = MultiEventPermissions(accessByEvent, imsAdmins, claims)
+	eventPermissions, globalPermissions = MultiEventPermissions(accessByEvent, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 	return eventPermissions, globalPermissions, nil
 }
 
-func UserPermissions3(
-	accessByEvent map[int32][]imsdb.EventAccess, // eventID to event accesses
+func MultiEventPermissions(
+	accessByEvent map[int32][]imsdb.EventAccess, // eventID as key
 	imsAdmins []string,
 	handle string,
 	onsite bool,
-	positions, teams []string,
+	positions []string,
+	teams []string,
 ) (eventPermissions map[int32]EventPermissionMask, globalPermissions GlobalPermissionMask) {
 
 	eventPermissions = make(map[int32]EventPermissionMask)
@@ -178,7 +180,6 @@ func UserPermissions3(
 			}
 			if matchExpr && matchValidity {
 				eventPermissions[eventID] |= RolesToEventPerms[translate[ea.Mode]]
-				//maps.Copy(eventPermissions[eventID], RolesToPerms[translate[ea.Mode]])
 			}
 		}
 	}

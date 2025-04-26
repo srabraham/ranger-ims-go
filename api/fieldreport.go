@@ -20,33 +20,30 @@ type GetFieldReports struct {
 }
 
 func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	resp := make(imsjson.FieldReports, 0)
+	var resp imsjson.FieldReports
 	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
 	if eventPermissions&(auth.EventReadAllFieldReports|auth.EventReadOwnFieldReports) == 0 {
-		slog.Error("The requestor does not have permission to read Field Reports on this Event")
-		http.Error(w, "The requestor does not have permission to read Field Reports on this Event", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to read Field Reports on this Event", nil)
 		return
 	}
-	// i.e. they have EventReadOwnFieldReports, but not EventReadAllFieldReports
+	// i.e. the user has EventReadOwnFieldReports, but not EventReadAllFieldReports
 	limitedAccess := eventPermissions&auth.EventReadAllFieldReports == 0
 
-	if ok := mustParseForm(w, req); !ok {
+	if ok = mustParseForm(w, req); !ok {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	ctx := req.Context()
-	reportEntries, err := imsdb.New(action.imsDB).FieldReports_ReportEntries(ctx,
+	reportEntries, err := imsdb.New(action.imsDB).FieldReports_ReportEntries(req.Context(),
 		imsdb.FieldReports_ReportEntriesParams{
 			Event:     event.ID,
 			Generated: generatedLTE,
 		})
 	if err != nil {
-		slog.Error("Failed to get FR report entries", "error", err)
-		http.Error(w, "Failed to fetch report entries", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to get FR report entries", err)
 		return
 	}
 
@@ -64,25 +61,34 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 		})
 	}
 
-	rows, err := imsdb.New(action.imsDB).FieldReports(ctx, event.ID)
+	storedFRs, err := imsdb.New(action.imsDB).FieldReports(req.Context(), event.ID)
 	if err != nil {
-		http.Error(w, "Failed to fetch Field Reports", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Field Reports", err)
 		return
 	}
 
-	for _, r := range rows {
-		fr := r.FieldReport
-		entries := entriesByFR[fr.Number]
-		if !limitedAccess || containsAuthor(entries, jwtCtx.Claims.RangerHandle()) {
-			resp = append(resp, imsjson.FieldReport{
-				Event:         event.Name,
-				Number:        fr.Number,
-				Created:       time.Unix(int64(fr.Created), 0),
-				Summary:       stringOrNil(fr.Summary),
-				Incident:      fr.IncidentNumber.Int32,
-				ReportEntries: entries,
-			})
+	var authorizedFRs []imsdb.FieldReportsRow
+	if limitedAccess {
+		for _, storedFR := range storedFRs {
+			entries := entriesByFR[storedFR.FieldReport.Number]
+			if containsAuthor(entries, jwtCtx.Claims.RangerHandle()) {
+				authorizedFRs = append(authorizedFRs, storedFR)
+			}
 		}
+	} else {
+		authorizedFRs = storedFRs
+	}
+
+	resp = make(imsjson.FieldReports, 0, len(authorizedFRs))
+	for _, fr := range authorizedFRs {
+		resp = append(resp, imsjson.FieldReport{
+			Event:         event.Name,
+			Number:        fr.FieldReport.Number,
+			Created:       time.Unix(int64(fr.FieldReport.Created), 0),
+			Summary:       stringOrNil(fr.FieldReport.Summary),
+			Incident:      fr.FieldReport.IncidentNumber.Int32,
+			ReportEntries: entriesByFR[fr.FieldReport.Number],
+		})
 	}
 
 	mustWriteJSON(w, resp)
@@ -98,21 +104,29 @@ func containsAuthor(entries []imsjson.ReportEntry, author string) bool {
 }
 
 type GetFieldReport struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	response := imsjson.FieldReport{}
-	ctx := req.Context()
+	var response imsjson.FieldReport
 
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&(auth.EventReadAllFieldReports|auth.EventReadOwnFieldReports) == 0 {
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to read Field Reports on this Event", nil)
+		return
+	}
+	// i.e. they have EventReadOwnFieldReports, but not EventReadAllFieldReports
+	limitedAccess := eventPermissions&auth.EventReadAllFieldReports == 0
+
+	ctx := req.Context()
+
 	fieldReportNumber, err := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
 	if err != nil {
-		slog.Error("Failed to parse field report number", "error", err)
-		http.Error(w, "Failed to parse field report number", http.StatusBadRequest)
+		handleErr(w, req, http.StatusBadRequest, "Invalid field report number", err)
 		return
 	}
 
@@ -122,29 +136,8 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			FieldReportNumber: int32(fieldReportNumber),
 		})
 	if err != nil {
-		slog.Error("Failed to get FR report entries", "error", err)
-		http.Error(w, "Failed to fetch report entries", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to get FR report entries", err)
 		return
-	}
-
-	frRow, err := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
-		Event:  event.ID,
-		Number: int32(fieldReportNumber),
-	})
-	if err != nil {
-		slog.Error("Failed to get Field Report", "error", err)
-		http.Error(w, "Failed to fetch Field Report", http.StatusInternalServerError)
-		return
-	}
-	fr := frRow.FieldReport
-
-	response = imsjson.FieldReport{
-		Event:         event.Name,
-		Number:        fr.Number,
-		Created:       time.Unix(int64(fr.Created), 0),
-		Summary:       stringOrNil(fr.Summary),
-		Incident:      fr.IncidentNumber.Int32,
-		ReportEntries: []imsjson.ReportEntry{},
 	}
 	entries := make([]imsjson.ReportEntry, 0)
 	for _, rer := range reportEntryRows {
@@ -159,6 +152,31 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			HasAttachment: re.AttachedFile.String != "",
 		})
 	}
+	if limitedAccess {
+		if !containsAuthor(entries, jwtCtx.Claims.RangerHandle()) {
+			handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to read this Field Report", nil)
+			return
+		}
+	}
+
+	frRow, err := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
+		Event:  event.ID,
+		Number: int32(fieldReportNumber),
+	})
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Field Report", err)
+		return
+	}
+	fr := frRow.FieldReport
+
+	response = imsjson.FieldReport{
+		Event:         event.Name,
+		Number:        fr.Number,
+		Created:       time.Unix(int64(fr.Created), 0),
+		Summary:       stringOrNil(fr.Summary),
+		Incident:      fr.IncidentNumber.Int32,
+		ReportEntries: []imsjson.ReportEntry{},
+	}
 	response.ReportEntries = entries
 	mustWriteJSON(w, response)
 }
@@ -170,59 +188,80 @@ type EditFieldReport struct {
 }
 
 func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
+	event, jwt, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
 	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
-		slog.Error("The requestor does not have permission to write Field Reports on this Event")
-		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to edit Field Reports on this Event", nil)
 		return
 	}
 	// i.e. they have EventWriteOwnFieldReports, but not EventWriteAllFieldReports
 	limitedAccess := eventPermissions&auth.EventWriteAllFieldReports == 0
 
 	ctx := req.Context()
-	if ok := mustParseForm(w, req); !ok {
+	if ok = mustParseForm(w, req); !ok {
 		return
 	}
-	fieldReportNumber, _ := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
-	author := jwtCtx.Claims.RangerHandle()
+	fieldReportNumber64, err := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
+	if err != nil {
+		handleErr(w, req, http.StatusBadRequest, "Invalid field report number", err)
+		return
+	}
+	fieldReportNumber := int32(fieldReportNumber64)
+	author := jwt.Claims.RangerHandle()
 	if limitedAccess {
-		if ok := action.mustCheckIfPreviousAuthor(w, ctx, event.ID, int32(fieldReportNumber), author); !ok {
+		if ok = action.mustCheckIfPreviousAuthor(w, req, event.ID, fieldReportNumber, author); !ok {
 			return
 		}
 	}
+
+	frr, err := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
+		Event:  event.ID,
+		Number: fieldReportNumber,
+	})
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Field Report", err)
+		return
+	}
+	storedFR := frr.FieldReport
+
 	queryAction := req.FormValue("action")
 	if queryAction != "" {
-		var incident sql.NullInt32
+		previousIncident := storedFR.IncidentNumber
+
+		var newIncident sql.NullInt32
 		entryText := ""
 		switch queryAction {
 		case "attach":
-			num, _ := strconv.ParseInt(req.FormValue("incident"), 10, 32)
-			incident = sql.NullInt32{Int32: int32(num), Valid: true}
-			entryText = fmt.Sprintf("Attached to incident %v", num)
+			num, _ := strconv.ParseInt(req.FormValue("newIncident"), 10, 32)
+			newIncident = sql.NullInt32{Int32: int32(num), Valid: true}
+			entryText = fmt.Sprintf("Attached to newIncident %v", num)
 		case "detach":
-			incident = sql.NullInt32{Valid: false}
-			entryText = "Detached from incident"
+			newIncident = sql.NullInt32{Valid: false}
+			entryText = "Detached from newIncident"
 		default:
-			slog.Error("Invalid action", "action", req.FormValue("action"))
-			http.Error(w, "Invalid action", http.StatusBadRequest)
+			handleErr(w, req, http.StatusBadRequest, "Invalid action", fmt.Errorf("provided bad action was %v", queryAction))
 			return
 		}
-		err := imsdb.New(action.imsDB).AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
-			IncidentNumber: incident,
+		err = imsdb.New(action.imsDB).AttachFieldReportToIncident(ctx, imsdb.AttachFieldReportToIncidentParams{
+			IncidentNumber: newIncident,
 			Event:          event.ID,
-			Number:         int32(fieldReportNumber),
+			Number:         fieldReportNumber,
 		})
 		if err != nil {
-			panic(err)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to attach Field Report to Incident", err)
+			return
 		}
-		err = addFRReportEntry(ctx, imsdb.New(action.imsDB), event.ID, int32(fieldReportNumber), author, entryText, true)
+		err = addFRReportEntry(ctx, imsdb.New(action.imsDB), event.ID, fieldReportNumber, author, entryText, true)
 		if err != nil {
-			panic(err)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to attach Report Entry to Field Report", err)
+			return
 		}
-		slog.Info("attached FR to incident", "event", event.ID, "incident", incident.Int32, "FR", fieldReportNumber)
+		defer action.eventSource.notifyFieldReportUpdate(event.Name, fieldReportNumber)
+		defer action.eventSource.notifyIncidentUpdate(event.Name, previousIncident.Int32)
+		defer action.eventSource.notifyIncidentUpdate(event.Name, newIncident.Int32)
+		slog.Info("Attached Field Report to newIncident", "event", event.ID, "newIncident", newIncident.Int32, "previousIncident", previousIncident.Int32, "field report", fieldReportNumber)
 	}
 
 	requestFR, ok := mustReadBodyAs[imsjson.FieldReport](w, req)
@@ -236,73 +275,68 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	//slog.Info("unmarshalled", "requestFR", requestFR)
-
-	frr, _ := imsdb.New(action.imsDB).FieldReport(ctx, imsdb.FieldReportParams{
-		Event:  event.ID,
-		Number: int32(fieldReportNumber),
-	})
-
-	storedFR := frr.FieldReport
-
-	txn, _ := action.imsDB.Begin()
+	txn, err := action.imsDB.Begin()
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to start transaction", err)
+		return
+	}
 	defer txn.Rollback()
-	dbTxn := imsdb.New(txn) //.WithTx(txn)
+	dbTxn := imsdb.New(txn)
 
 	if requestFR.Summary != nil {
 		storedFR.Summary = sqlNullString(requestFR.Summary)
 		text := "Changed summary to: " + *requestFR.Summary
-		err := addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, text, true)
+		err = addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, text, true)
 		if err != nil {
-			slog.Error("Error adding system fr report entry", "error", err)
-			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Error adding system Field Report Report Entry", err)
 			return
 		}
 	}
-	_ = dbTxn.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
+	err = dbTxn.UpdateFieldReport(ctx, imsdb.UpdateFieldReportParams{
 		Event:          storedFR.Event,
 		Number:         storedFR.Number,
 		Summary:        storedFR.Summary,
 		IncidentNumber: storedFR.IncidentNumber,
 	})
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to update Field Report", err)
+		return
+	}
 	for _, entry := range requestFR.ReportEntries {
 		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, entry.Text, false)
+		err = addFRReportEntry(ctx, dbTxn, event.ID, storedFR.Number, author, entry.Text, false)
 		if err != nil {
-			slog.Error("Error adding fr report entry", "error", err)
-			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Error adding Field Report Report Entry", err)
 			return
 		}
 	}
 
-	if err := txn.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+	if err = txn.Commit(); err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
-	http.Error(w, "Success", http.StatusNoContent)
+	defer action.eventSource.notifyFieldReportUpdate(event.Name, storedFR.Number)
 
-	action.eventSource.notifyFieldReportUpdate(event.Name, storedFR.Number)
+	http.Error(w, "Success", http.StatusNoContent)
 }
 
 func (action EditFieldReport) mustCheckIfPreviousAuthor(
 	w http.ResponseWriter,
-	ctx context.Context,
+	req *http.Request,
 	eventID int32,
 	fieldReportNumber int32,
 	author string,
 ) (isPreviousAuthor bool) {
-	entries, err := imsdb.New(action.imsDB).FieldReport_ReportEntries(ctx,
+	entries, err := imsdb.New(action.imsDB).FieldReport_ReportEntries(req.Context(),
 		imsdb.FieldReport_ReportEntriesParams{
 			Event:             eventID,
 			FieldReportNumber: fieldReportNumber,
 		})
 	if err != nil {
-		slog.Error("Failed to get FR report entries", "error", err)
-		http.Error(w, "Failed to get FR report entries", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Field Report Report Entries", err)
 		return false
 	}
 	authorMatch := false
@@ -313,8 +347,7 @@ func (action EditFieldReport) mustCheckIfPreviousAuthor(
 		}
 	}
 	if !authorMatch {
-		slog.Error("EditFieldReport denied to user who is not a previous author on this FieldReport")
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "EditFieldReport denied to user who is not a previous author on this FieldReport", nil)
 		return false
 	}
 	return true
@@ -332,8 +365,7 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
-		slog.Error("The requestor does not have permission to write Field Reports on this Event")
-		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have permission to write Field Reports on this Event", nil)
 		return
 	}
 	ctx := req.Context()
@@ -344,60 +376,69 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	}
 
 	if fr.Incident != 0 {
-		slog.Error("New FR may not be attached to an incident", "incident", fr.Incident)
-		http.Error(w, "New FR may not be attached to an incident", http.StatusBadRequest)
+		handleErr(w, req, http.StatusBadRequest, "A new Field Report may not be attached to an incident", nil)
 		return
 	}
 
 	author := jwtCtx.Claims.RangerHandle()
-	numUntyped, _ := imsdb.New(action.imsDB).MaxFieldReportNumber(ctx, event.ID)
+	numUntyped, err := imsdb.New(action.imsDB).MaxFieldReportNumber(ctx, event.ID)
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to find next Field Report number", err)
+		return
+	}
 	newFrNum := numUntyped.(int64) + 1
 
-	txn, _ := action.imsDB.Begin()
+	txn, err := action.imsDB.Begin()
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to start transaction", err)
+		return
+	}
 	defer txn.Rollback()
 	dbTxn := imsdb.New(txn)
 
-	_ = dbTxn.CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
+	err = dbTxn.CreateFieldReport(ctx, imsdb.CreateFieldReportParams{
 		Event:          event.ID,
 		Number:         int32(newFrNum),
 		Created:        float64(time.Now().Unix()),
 		Summary:        sqlNullString(fr.Summary),
 		IncidentNumber: sql.NullInt32{},
 	})
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to create Field Report", err)
+		return
+	}
 
 	for _, entry := range fr.ReportEntries {
 		if entry.Text == "" {
 			continue
 		}
-		err := addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, entry.Text, false)
+		err = addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, entry.Text, false)
 		if err != nil {
-			slog.Error("Error adding system fr report entry", "error", err)
-			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Error adding Report Entry", err)
 			return
 		}
 	}
 
 	if fr.Summary != nil {
 		text := "Changed summary to: " + *fr.Summary
-		err := addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, text, true)
+		err = addFRReportEntry(ctx, dbTxn, event.ID, int32(newFrNum), author, text, true)
 		if err != nil {
-			slog.Error("Error adding system fr report entry", "error", err)
-			http.Error(w, "Error adding report entry", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Error changing Field Report summary", err)
 			return
 		}
 	}
 
-	if err := txn.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+	if err = txn.Commit(); err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
-	w.Header().Set("X-IMS-Field-Report-Number", strconv.FormatInt(newFrNum, 10))
-	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/field_reports/"+strconv.FormatInt(newFrNum, 10))
-	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
+	loc := fmt.Sprintf("/ims/api/events/%v/field_reports/%v", event.Name, newFrNum)
+	w.Header().Set("X-IMS-Field-Report-Number", fmt.Sprint(newFrNum))
+	w.Header().Set("Location", loc)
+	defer action.eventSource.notifyFieldReportUpdate(event.Name, int32(newFrNum))
 
-	action.eventSource.notifyFieldReportUpdate(event.Name, int32(newFrNum))
+	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
 }
 
 func addFRReportEntry(ctx context.Context, q *imsdb.Queries, eventID, frNum int32, author, text string, generated bool) error {

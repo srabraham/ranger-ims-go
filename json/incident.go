@@ -25,17 +25,17 @@ const (
 )
 
 type Incident struct {
-	Event         string         `json:"event"`
-	EventID       int32          `json:"event_id"`
-	Number        int32          `json:"number"`
-	Created       time.Time      `json:"created,omitzero"`
-	LastModified  time.Time      `json:"last_modified,omitzero"`
-	State         string         `json:"state"`
-	Priority      int8           `json:"priority"`
-	Summary       *string        `json:"summary"`
-	Location      Location       `json:"location"`
-	IncidentTypes *IncidentTypes `json:"incident_types"`
-	FieldReports  *[]int32       `json:"field_reports"`
-	RangerHandles *[]string      `json:"ranger_handles"`
-	ReportEntries []ReportEntry  `json:"report_entries"`
+	Event         string        `json:"event"`
+	EventID       int32         `json:"event_id"`
+	Number        int32         `json:"number"`
+	Created       time.Time     `json:"created,omitzero"`
+	LastModified  time.Time     `json:"last_modified,omitzero"`
+	State         string        `json:"state"`
+	Priority      int8          `json:"priority"`
+	Summary       *string       `json:"summary"`
+	Location      Location      `json:"location"`
+	IncidentTypes *[]string     `json:"incident_types"`
+	FieldReports  *[]int32      `json:"field_reports"`
+	RangerHandles *[]string     `json:"ranger_handles"`
+	ReportEntries []ReportEntry `json:"report_entries"`
 }

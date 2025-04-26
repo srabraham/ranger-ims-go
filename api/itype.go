@@ -1,20 +1,29 @@
 package api
 
 import (
+	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"log/slog"
 	"net/http"
 	"slices"
 )
 
 type GetIncidentTypes struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	response := make(imsjson.IncidentTypes, 0)
+	_, globalPermissions, ok := mustGetGlobalPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
+		return
+	}
+	if globalPermissions&auth.GlobalReadIncidentTypes == 0 {
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have GlobalReadIncidentTypes permission", nil)
+		return
+	}
 
 	if success := mustParseForm(w, req); !success {
 		return
@@ -22,8 +31,7 @@ func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reques
 	includeHidden := req.Form.Get("hidden") == "true"
 	typeRows, err := imsdb.New(action.imsDB).IncidentTypes(req.Context())
 	if err != nil {
-		slog.Error("IncidentTypes query", "error", err)
-		http.Error(w, "IncidentTypes query failed", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Incident Types", nil)
 		return
 	}
 
@@ -40,10 +48,19 @@ func (action GetIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reques
 }
 
 type EditIncidentTypes struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	_, globalPermissions, ok := mustGetGlobalPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
+		return
+	}
+	if globalPermissions&auth.GlobalAdministrateIncidentTypes == 0 {
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have GlobalAdministrateIncidentTypes permission", nil)
+		return
+	}
 	ctx := req.Context()
 	typesReq, ok := mustReadBodyAs[imsjson.EditIncidentTypesRequest](w, req)
 	if !ok {
@@ -55,8 +72,7 @@ func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reque
 			Hidden: false,
 		})
 		if err != nil {
-			slog.Error("Failed to create incident type", "error", err)
-			http.Error(w, "Failed to create incident type", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to create incident type", nil)
 			return
 		}
 	}
@@ -66,8 +82,7 @@ func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reque
 			Hidden: true,
 		})
 		if err != nil {
-			slog.Error("Failed to hide incident type", "error", err)
-			http.Error(w, "Failed to hide incident type", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to hide incident type", nil)
 			return
 		}
 	}
@@ -77,10 +92,9 @@ func (action EditIncidentTypes) ServeHTTP(w http.ResponseWriter, req *http.Reque
 			Hidden: false,
 		})
 		if err != nil {
-			slog.Error("Failed to unhide incident type", "error", err)
-			http.Error(w, "Failed to unhide incident type", http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to unhide incident type", nil)
 			return
 		}
 	}
-	http.Error(w, "Success", http.StatusOK)
+	http.Error(w, "Success", http.StatusNoContent)
 }

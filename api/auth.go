@@ -28,17 +28,8 @@ type PostAuthResponse struct {
 }
 
 func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	//results, err := clubhousequeries.New(action.clubhouseDB).RangersById(req.Context())
-	//if err != nil {
-	//	slog.Error("Failed to fetch Rangers", "error", err)
-	//	w.WriteHeader(http.StatusInternalServerError)
-	//	return
-	//}
-	//b, err := io.ReadAll(req.Body)
-	//defer req.Body.Close()
-	//if err != nil {
-	//	return
-	//}
+	// This endpoint is unauthenticated (doesn't require an Authorization header)
+	// as the point of this is to take a username and password to create a new JWT.
 
 	vals, ok := mustReadBodyAs[PostAuthRequest](w, req)
 	if !ok {
@@ -51,13 +42,6 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to get personnel", http.StatusInternalServerError)
 		return
 	}
-
-	//if err = json.Unmarshal(b, &vals); err != nil {
-	//	slog.Error("Failed to parse request body", "error", err)
-	//	w.WriteHeader(http.StatusBadRequest)
-	//	return
-	//}
-
 	var storedPassHash string
 	var userID int64
 	var onsite bool
@@ -94,58 +78,6 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	mustWriteJSON(w, resp)
 }
 
-///*func (action PostAuth) positionsAndTeams(ctx context.Context, userID int64) (positionNames []string, teamNames []string, err error) {
-//	// There's no need to cache the personnel, because we only query the Clubhouse tables
-//	// on user login. JWT claims assert users' identity, positions, teams, and onsite
-//	// status in all subsequent requests. We still query PERSON on personnel calls, but
-//	// even those calls are cached on the client side.
-//
-//	positions, teams, err := action.userStore.GetUserPositionsTeams(ctx, userID)
-//
-//	//teams, err := clubhousequeries.New(action.clubhouseDB).Teams(ctx)
-//	//if err != nil {
-//	//	return nil, nil, fmt.Errorf("[Teams]: %w", err)
-//	//}
-//	//positions, err := clubhousequeries.New(action.clubhouseDB).Positions(ctx)
-//	//if err != nil {
-//	//	return nil, nil, fmt.Errorf("[Positions]: %w", err)
-//	//}
-//	//personTeams, err := clubhousequeries.New(action.clubhouseDB).PersonTeams(ctx)
-//	//if err != nil {
-//	//	return nil, nil, fmt.Errorf("[PersonTeams]: %w", err)
-//	//}
-//	//personPositions, err := clubhousequeries.New(action.clubhouseDB).PersonPositions(ctx)
-//	//if err != nil {
-//	//	return nil, nil, fmt.Errorf("[PersonPositions]: %w", err)
-//	//}
-//	//
-//	//var foundPositions []uint64
-//	//var foundPositionNames []string
-//	//var foundTeams []int32
-//	//var foundTeamNames []string
-//	//for _, pp := range personPositions {
-//	//	if pp.PersonID == uint64(userID) {
-//	//		foundPositions = append(foundPositions, pp.PositionID)
-//	//	}
-//	//}
-//	//for _, pos := range positions {
-//	//	if slices.Contains(foundPositions, pos.ID) {
-//	//		foundPositionNames = append(foundPositionNames, pos.Title)
-//	//	}
-//	//}
-//	//for _, pt := range personTeams {
-//	//	if pt.PersonID == int32(userID) {
-//	//		foundTeams = append(foundTeams, pt.TeamID)
-//	//	}
-//	//}
-//	//for _, team := range teams {
-//	//	if slices.Contains(foundTeams, int32(team.ID)) {
-//	//		foundTeamNames = append(foundTeamNames, team.Title)
-//	//	}
-//	//}
-//	//return foundPositionNames, foundTeamNames, nil
-//}*/
-
 type GetAuth struct {
 	imsDB     *store.DB
 	jwtSecret string
@@ -167,6 +99,7 @@ type AccessForEvent struct {
 }
 
 func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// This endpoint is unauthenticated (doesn't require an Authorization header).
 	resp := GetAuthResponse{}
 
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
@@ -198,7 +131,7 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		eventPermissions, _, err := auth.UserPermissions2(req.Context(), &event.ID, action.imsDB, action.admins, *claims)
+		eventPermissions, _, err := auth.EventPermissions(req.Context(), &event.ID, action.imsDB, action.admins, *claims)
 		if err != nil {
 			slog.Error("Failed to compute permissions", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)

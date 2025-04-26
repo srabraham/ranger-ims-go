@@ -4,34 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"log/slog"
 	"net/http"
 	"sync"
 )
 
 type GetEventAccesses struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetEventAccesses) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := imsjson.EventsAccess{}
-	ctx := req.Context()
+	_, globalPermissions, ok := mustGetGlobalPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
+		return
+	}
+	if globalPermissions&auth.GlobalAdministrateEvents == 0 {
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have GlobalAdministrateEvents permission", nil)
+		return
+	}
 
-	resp, err := GetEventsAccess(ctx, action.imsDB)
+	resp, err := getEventsAccess(req.Context(), action.imsDB)
 	if err != nil {
-		slog.Error("GetEventsAccess failed", "error", err)
-		http.Error(w, "Failed to get events access", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to get events access", err)
 		return
 	}
 	mustWriteJSON(w, resp)
 }
 
-func GetEventsAccess(ctx context.Context, imsDB *store.DB) (imsjson.EventsAccess, error) {
-	result := make(imsjson.EventsAccess)
-
+func getEventsAccess(ctx context.Context, imsDB *store.DB) (imsjson.EventsAccess, error) {
 	allEventRows, err := imsdb.New(imsDB).Events(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("[Events]: %w", err)
@@ -50,11 +55,8 @@ func GetEventsAccess(ctx context.Context, imsDB *store.DB) (imsjson.EventsAccess
 		accessRowByEventID[ar.EventAccess.Event] = append(accessRowByEventID[ar.EventAccess.Event], ar.EventAccess)
 	}
 
+	result := make(imsjson.EventsAccess)
 	for _, e := range storedEvents {
-		//accessRows, err := imsdb.New(dbtx).EventAccess(ctx, e.ID)
-		//if err != nil {
-		//	return nil, fmt.Errorf("[EventAccess]: %w", err)
-		//}
 		ea := imsjson.EventAccess{
 			Readers:   []imsjson.AccessRule{},
 			Writers:   []imsjson.AccessRule{},
@@ -78,17 +80,22 @@ func GetEventsAccess(ctx context.Context, imsDB *store.DB) (imsjson.EventsAccess
 }
 
 type PostEventAccess struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 var eventAccessWriteMu sync.Mutex
 
 func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-	// TODO: is this needed? Where else might it not be needed? I don't see a Form read here
-	if ok := mustParseForm(w, req); !ok {
+	_, globalPermissions, ok := mustGetGlobalPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
 		return
 	}
+	if globalPermissions&auth.GlobalAdministrateEvents == 0 {
+		handleErr(w, req, http.StatusForbidden, "The requestor does not have GlobalAdministrate permission", nil)
+		return
+	}
+	ctx := req.Context()
 	eventsAccess, ok := mustReadBodyAs[imsjson.EventsAccess](w, req)
 	if !ok {
 		return
@@ -104,11 +111,10 @@ func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request
 		errs = append(errs, action.maybeSetAccess(ctx, event, access.Reporters, imsdb.EventAccessModeReport))
 	}
 	if err := errors.Join(errs...); err != nil {
-		slog.Error("PostEventAccess", "error", err)
-		http.Error(w, "Failed to set event access", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to set event access", err)
 		return
 	}
-	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
+	http.Error(w, "Successfully set event access", http.StatusNoContent)
 }
 
 func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Event, rules []imsjson.AccessRule, mode imsdb.EventAccessMode) error {
@@ -120,11 +126,10 @@ func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Ev
 	defer eventAccessWriteMu.Unlock()
 
 	txn, err := action.imsDB.BeginTx(ctx, nil)
-	defer txn.Rollback()
-
 	if err != nil {
 		return fmt.Errorf("[BeginTx]: %w", err)
 	}
+	defer txn.Rollback()
 	err = imsdb.New(txn).ClearEventAccessForMode(ctx, imsdb.ClearEventAccessForModeParams{
 		Event: event.ID,
 		Mode:  mode,

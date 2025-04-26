@@ -11,11 +11,14 @@ import (
 const EventSourceChannel = "imsevents"
 
 type IMSEventData struct {
-	EventName         string `json:"event_name,omitzero"`
-	IncidentNumber    int32  `json:"incident_number,omitzero"`
-	FieldReportNumber int32  `json:"field_report_number,omitzero"`
-	InitialEvent      bool   `json:"initial_event,omitzero"`
-	Comment           string `json:"comment,omitzero"`
+	EventName string `json:"event_name,omitzero"`
+	Comment   string `json:"comment,omitzero"`
+
+	// Exactly one of the below three fields must be set, as this indicates the type of IMS SSE.
+
+	IncidentNumber    int32 `json:"incident_number,omitzero"`
+	FieldReportNumber int32 `json:"field_report_number,omitzero"`
+	InitialEvent      bool  `json:"initial_event,omitzero"`
 }
 
 type IMSEvent struct {
@@ -64,6 +67,9 @@ func NewEventSourcerer() *EventSourcerer {
 }
 
 func (es *EventSourcerer) notifyFieldReportUpdate(eventName string, frNumber int32) {
+	if frNumber == 0 {
+		return
+	}
 	es.Server.Publish([]string{EventSourceChannel}, IMSEvent{
 		EventID: es.IdCounter.Add(1),
 		EventData: IMSEventData{
@@ -74,6 +80,9 @@ func (es *EventSourcerer) notifyFieldReportUpdate(eventName string, frNumber int
 }
 
 func (es *EventSourcerer) notifyIncidentUpdate(eventName string, incidentNumber int32) {
+	if incidentNumber == 0 {
+		return
+	}
 	es.Server.Publish([]string{EventSourceChannel}, IMSEvent{
 		EventID: es.IdCounter.Add(1),
 		EventData: IMSEventData{

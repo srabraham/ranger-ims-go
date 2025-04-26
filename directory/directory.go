@@ -16,10 +16,10 @@ type UserStore struct {
 
 func NewUserStore(testUsers []conf.TestUser, clubhouseDB *DB) (*UserStore, error) {
 	if clubhouseDB == nil && testUsers == nil {
-		return nil, fmt.Errorf("NewUserStore: one of clubhouseDB or testUsers must be provided")
+		return nil, fmt.Errorf("NewUserStore: exactly one of clubhouseDB or testUsers must be provided (got none)")
 	}
 	if clubhouseDB != nil && testUsers != nil {
-		return nil, fmt.Errorf("NewUserStore: only one of clubhouseDB or testUsers may be provided")
+		return nil, fmt.Errorf("NewUserStore: exactly one of clubhouseDB or testUsers must be provided (got both)")
 	}
 	return &UserStore{
 		testUsers:   testUsers,
