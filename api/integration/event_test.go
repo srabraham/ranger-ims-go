@@ -1,10 +1,11 @@
-package api
+package integration
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/srabraham/ranger-ims-go/api"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
@@ -100,7 +101,7 @@ func TestGetEvent(t *testing.T) {
 	_, err := imsDB.ExecContext(ctx, script)
 	require.NoError(t, err)
 
-	s := httptest.NewServer(AddToMux(nil, imsCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, _ := url.Parse(s.URL)
 

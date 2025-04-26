@@ -39,12 +39,6 @@ insert into INCIDENT (
     CREATED,
     PRIORITY,
     STATE
---     SUMMARY,
---     LOCATION_NAME,
---     LOCATION_CONCENTRIC,
---     LOCATION_RADIAL_HOUR,
---     LOCATION_RADIAL_MINUTE,
---     LOCATION_DESCRIPTION
 )
 values (
    ?,?,?,?,?
@@ -65,24 +59,6 @@ where
     EVENT = ?
     and NUMBER = ?
 ;
---
--- -- name: UpdateIncident :exec
--- UPDATE INCIDENT (
---     EVENT,
---     NUMBER,
---     CREATED,
---     PRIORITY,
---     STATE,
---     SUMMARY,
---     LOCATION_NAME,
---     LOCATION_CONCENTRIC,
---     LOCATION_RADIAL_HOUR,
---     LOCATION_RADIAL_MINUTE,
---     LOCATION_DESCRIPTION
--- )
--- values (
---            ?,?,?,?,?,?,?,?,?,?,?
---        );
 
 -- name: Incident :one
 select

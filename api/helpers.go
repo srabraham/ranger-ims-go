@@ -168,3 +168,14 @@ func toInt32(s string) int32 {
 	i, _ := strconv.ParseInt(s, 10, 32)
 	return int32(i)
 }
+
+func stringOrNil(v sql.NullString) *string {
+	if v.Valid {
+		return &v.String
+	}
+	return nil
+}
+
+func ptr[T any](t T) *T {
+	return &t
+}

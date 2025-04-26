@@ -343,35 +343,35 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 
 	if newIncident.Priority != 0 {
 		update.Priority = newIncident.Priority
-		logs = append(logs, fmt.Sprintf("priority: %v", update.Priority))
+		logs = append(logs, fmt.Sprintf("Changed priority: %v", update.Priority))
 	}
 	if imsdb.IncidentState(newIncident.State).Valid() {
 		update.State = imsdb.IncidentState(newIncident.State)
-		logs = append(logs, fmt.Sprintf("state: %v", update.State))
+		logs = append(logs, fmt.Sprintf("Changed state: %v", update.State))
 	}
 	if newIncident.Summary != nil {
 		update.Summary = sqlNullString(newIncident.Summary)
-		logs = append(logs, fmt.Sprintf("summary: %v", update.Summary.String))
+		logs = append(logs, fmt.Sprintf("Changed summary: %v", update.Summary.String))
 	}
 	if newIncident.Location.Name != nil {
 		update.LocationName = sqlNullString(newIncident.Location.Name)
-		logs = append(logs, fmt.Sprintf("location name: %v", update.LocationName.String))
+		logs = append(logs, fmt.Sprintf("Changed location name: %v", update.LocationName.String))
 	}
 	if newIncident.Location.Concentric != nil {
 		update.LocationConcentric = sqlNullString(newIncident.Location.Concentric)
-		logs = append(logs, fmt.Sprintf("location concentric: %v", update.LocationConcentric.String))
+		logs = append(logs, fmt.Sprintf("Changed location concentric: %v", update.LocationConcentric.String))
 	}
 	if newIncident.Location.RadialHour != nil {
 		update.LocationRadialHour = parseInt16(newIncident.Location.RadialHour)
-		logs = append(logs, fmt.Sprintf("location radial hour: %v", update.LocationRadialHour.Int16))
+		logs = append(logs, fmt.Sprintf("Changed location radial hour: %v", update.LocationRadialHour.Int16))
 	}
 	if newIncident.Location.RadialMinute != nil {
 		update.LocationRadialMinute = parseInt16(newIncident.Location.RadialMinute)
-		logs = append(logs, fmt.Sprintf("location radial minute: %v", update.LocationRadialMinute.Int16))
+		logs = append(logs, fmt.Sprintf("Changed location radial minute: %v", update.LocationRadialMinute.Int16))
 	}
 	if newIncident.Location.Description != nil {
 		update.LocationDescription = sqlNullString(newIncident.Location.Description)
-		logs = append(logs, fmt.Sprintf("location description: %v", update.LocationDescription.String))
+		logs = append(logs, fmt.Sprintf("Changed location description: %v", update.LocationDescription.String))
 	}
 	err = dbTxn.UpdateIncident(ctx, update)
 	if err != nil {
@@ -382,7 +382,7 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 		add := sliceSubtract(*newIncident.RangerHandles, rangerHandles)
 		sub := sliceSubtract(rangerHandles, *newIncident.RangerHandles)
 		if len(add) > 0 {
-			logs = append(logs, fmt.Sprintf("Rangers added: %v", add))
+			logs = append(logs, fmt.Sprintf("Added Ranger: %v", strings.Join(add, ", ")))
 			for _, rh := range add {
 				err = dbTxn.AttachRangerHandleToIncident(ctx, imsdb.AttachRangerHandleToIncidentParams{
 					Event:          newIncident.EventID,
@@ -395,7 +395,7 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 			}
 		}
 		if len(sub) > 0 {
-			logs = append(logs, fmt.Sprintf("Rangers removed: %v", sub))
+			logs = append(logs, fmt.Sprintf("Removed Ranger: %v", strings.Join(sub, ", ")))
 			for _, rh := range sub {
 				err = dbTxn.DetachRangerHandleFromIncident(ctx, imsdb.DetachRangerHandleFromIncidentParams{
 					Event:          newIncident.EventID,
@@ -413,7 +413,7 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 		add := sliceSubtract(*newIncident.IncidentTypes, incidentTypes)
 		sub := sliceSubtract(incidentTypes, *newIncident.IncidentTypes)
 		if len(add) > 0 {
-			logs = append(logs, fmt.Sprintf("type added: %v", add))
+			logs = append(logs, fmt.Sprintf("Added type: %v", strings.Join(add, ", ")))
 			for _, itype := range add {
 				err = dbTxn.AttachIncidentTypeToIncident(ctx, imsdb.AttachIncidentTypeToIncidentParams{
 					Event:          newIncident.EventID,
@@ -426,7 +426,7 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 			}
 		}
 		if len(sub) > 0 {
-			logs = append(logs, fmt.Sprintf("type removed: %v", sub))
+			logs = append(logs, fmt.Sprintf("Removed type: %v", strings.Join(sub, ", ")))
 			for _, rh := range sub {
 				err = dbTxn.DetachIncidentTypeFromIncident(ctx, imsdb.DetachIncidentTypeFromIncidentParams{
 					Event:          newIncident.EventID,
@@ -475,7 +475,7 @@ func updateIncident(ctx context.Context, imsDB *store.DB, es *EventSourcerer, ne
 	}
 
 	if len(logs) > 0 {
-		err = addIncidentReportEntry(ctx, dbTxn, newIncident.EventID, newIncident.Number, author, fmt.Sprintf("Changed %v", strings.Join(logs, ", ")), true)
+		err = addIncidentReportEntry(ctx, dbTxn, newIncident.EventID, newIncident.Number, author, strings.Join(logs, "\n"), true)
 		if err != nil {
 			return fmt.Errorf("[addIncidentReportEntry]: %w", err)
 		}

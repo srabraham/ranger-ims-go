@@ -234,12 +234,16 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 		entryText := ""
 		switch queryAction {
 		case "attach":
-			num, _ := strconv.ParseInt(req.FormValue("newIncident"), 10, 32)
+			num, err := strconv.ParseInt(req.FormValue("incident"), 10, 32)
+			if err != nil {
+				handleErr(w, req, http.StatusBadRequest, "Invalid incident number for attachment of FR", err)
+				return
+			}
 			newIncident = sql.NullInt32{Int32: int32(num), Valid: true}
-			entryText = fmt.Sprintf("Attached to newIncident %v", num)
+			entryText = fmt.Sprintf("Attached to incident: %v", num)
 		case "detach":
 			newIncident = sql.NullInt32{Valid: false}
-			entryText = "Detached from newIncident"
+			entryText = fmt.Sprintf("Detached from incident: %v", previousIncident.Int32)
 		default:
 			handleErr(w, req, http.StatusBadRequest, "Invalid action", fmt.Errorf("provided bad action was %v", queryAction))
 			return

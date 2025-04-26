@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/directory"
@@ -24,6 +23,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/access",
 		Adapt(
 			GetEventAccesses{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -32,6 +32,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/access",
 		Adapt(
 			PostEventAccess{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -45,6 +46,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				jwtSecret:   cfg.Core.JWTSecret,
 				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
 			},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			// This endpoint does not require authentication, nor
 			// does it even consider the request's Authorization header,
@@ -59,6 +61,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				jwtSecret: cfg.Core.JWTSecret,
 				admins:    cfg.Core.Admins,
 			},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			// This endpoint does not require authentication or authorization, by design
 			OptionalAuthN(jwter),
@@ -68,6 +71,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/events/{eventName}/incidents",
 		Adapt(
 			GetIncidents{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -76,6 +80,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/incidents",
 		Adapt(
 			NewIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -84,6 +89,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
 			GetIncident{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -92,6 +98,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
 			EditIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -100,6 +107,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}/report_entries/{reportEntryId}",
 		Adapt(
 			EditIncidentReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -108,6 +116,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports",
 		Adapt(
 			GetFieldReports{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -116,6 +125,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports",
 		Adapt(
 			NewFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -124,6 +134,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
 			GetFieldReport{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -132,6 +143,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}",
 		Adapt(
 			EditFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -140,6 +152,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}/report_entries/{reportEntryId}",
 		Adapt(
 			EditFieldReportReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -148,6 +161,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/events",
 		Adapt(
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -156,6 +170,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/events",
 		Adapt(
 			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -164,6 +179,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/streets",
 		Adapt(
 			GetStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -172,6 +188,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/streets",
 		Adapt(
 			EditStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -180,6 +197,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/incident_types",
 		Adapt(
 			GetIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -188,6 +206,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("POST /ims/api/incident_types",
 		Adapt(
 			EditIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -196,6 +215,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/personnel",
 		Adapt(
 			GetPersonnel{imsDB: db, userStore: userStore, imsAdmins: cfg.Core.Admins},
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 			RequireAuthN(jwter),
 		),
@@ -204,6 +224,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.Handle("GET /ims/api/eventsource",
 		Adapt(
 			es.Server.Handler(EventSourceChannel),
+			RecoverOnPanic(),
 			LogBeforeAfter(),
 		),
 	)
@@ -227,36 +248,28 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	return mux
 }
 
-func int32OrNil(v sql.NullInt32) *int32 {
-	if v.Valid {
-		return &v.Int32
-	}
-	return nil
-}
-
-func int16OrNil(v sql.NullInt16) *int16 {
-	if v.Valid {
-		return &v.Int16
-	}
-	return nil
-}
-
-func stringOrNil(v sql.NullString) *string {
-	if v.Valid {
-		return &v.String
-	}
-	return nil
-}
-
-func ptr[T any](t T) *T {
-	return &t
-}
-
 type Adapter func(http.Handler) http.Handler
 
 func LogBeforeAfter() Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			next.ServeHTTP(w, r)
+			slog.Debug("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
+		})
+	}
+}
+
+func RecoverOnPanic() Adapter {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if err := recover(); err != nil {
+					slog.Error("Recovered from panic", "err", err)
+					debug.PrintStack()
+					http.Error(w, "The server malfunctioned", http.StatusInternalServerError)
+				}
+			}()
 			start := time.Now()
 			next.ServeHTTP(w, r)
 			slog.Debug("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)

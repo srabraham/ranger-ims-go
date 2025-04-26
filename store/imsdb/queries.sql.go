@@ -298,12 +298,6 @@ type CreateIncidentParams struct {
 	State    IncidentState
 }
 
-// SUMMARY,
-// LOCATION_NAME,
-// LOCATION_CONCENTRIC,
-// LOCATION_RADIAL_HOUR,
-// LOCATION_RADIAL_MINUTE,
-// LOCATION_DESCRIPTION
 func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createIncident,
 		arg.Event,
@@ -731,7 +725,6 @@ func (q *Queries) HideShowIncidentType(ctx context.Context, arg HideShowIncident
 }
 
 const incident = `-- name: Incident :one
-
 select
     i.event, i.number, i.created, i.priority, i.state, i.summary, i.location_name, i.location_concentric, i.location_radial_hour, i.location_radial_minute, i.location_description,
     (
@@ -771,26 +764,6 @@ type IncidentRow struct {
 	RangerHandles      interface{}
 }
 
-// -- name: UpdateIncident :exec
-// UPDATE INCIDENT (
-//
-//	EVENT,
-//	NUMBER,
-//	CREATED,
-//	PRIORITY,
-//	STATE,
-//	SUMMARY,
-//	LOCATION_NAME,
-//	LOCATION_CONCENTRIC,
-//	LOCATION_RADIAL_HOUR,
-//	LOCATION_RADIAL_MINUTE,
-//	LOCATION_DESCRIPTION
-//
-// )
-// values (
-//
-//	    ?,?,?,?,?,?,?,?,?,?,?
-//	);
 func (q *Queries) Incident(ctx context.Context, arg IncidentParams) (IncidentRow, error) {
 	row := q.db.QueryRowContext(ctx, incident, arg.Event, arg.Number)
 	var i IncidentRow
