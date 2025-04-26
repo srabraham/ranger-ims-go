@@ -9,6 +9,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/store"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 )
 
@@ -210,6 +211,16 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 	mux.HandleFunc("GET /ims/api/ping",
 		func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "ack", http.StatusOK)
+		},
+	)
+
+	mux.HandleFunc("GET /ims/api/debug/buildinfo",
+		func(w http.ResponseWriter, req *http.Request) {
+			bi, ok := debug.ReadBuildInfo()
+			if !ok {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+			http.Error(w, bi.String(), http.StatusOK)
 		},
 	)
 
