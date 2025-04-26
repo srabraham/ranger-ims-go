@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
 	"io"
@@ -78,8 +79,8 @@ func mustGetEvent(w http.ResponseWriter, req *http.Request, eventName string, im
 
 	eventRow, err := imsdb.New(imsDB).QueryEventID(req.Context(), eventName)
 	if err != nil {
-		slog.Error("Failed to get event ID", "error", err)
-		http.Error(w, "Failed to get event ID", http.StatusInternalServerError)
+		slog.Error("Failed to fetch event", "error", err)
+		http.Error(w, "Event not found", http.StatusNotFound)
 		return imsdb.Event{}, false
 	}
 	return eventRow.Event, true
@@ -105,7 +106,7 @@ func mustWriteJSON(w http.ResponseWriter, resp any) (success bool) {
 func mustGetJwtCtx(w http.ResponseWriter, req *http.Request) (JWTContext, bool) {
 	jwtCtx, found := req.Context().Value(JWTContextKey).(JWTContext)
 	if !found {
-		slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
+		slog.Error("the ExtractJWTOptionalAuthN adapter must be called before ExtractJWTRequireAuthN")
 		http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
 			http.StatusInternalServerError)
 		return JWTContext{}, false
@@ -122,4 +123,22 @@ func mustGetPermissionsCtx(w http.ResponseWriter, req *http.Request) (Permission
 		return PermissionsContext{}, false
 	}
 	return permsCtx, true
+}
+
+func mustGetEventPermissions(w http.ResponseWriter, req *http.Request, imsDB *store.DB, imsAdmins []string) (imsdb.Event, JWTContext, auth.EventPermissionMask, bool) {
+	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), imsDB)
+	if !ok {
+		return imsdb.Event{}, JWTContext{}, 0, false
+	}
+	jwtCtx, ok := mustGetJwtCtx(w, req)
+	if !ok {
+		return imsdb.Event{}, JWTContext{}, 0, false
+	}
+	eventPermissions, _, err := auth.UserPermissions2(req.Context(), &event.ID, imsDB, imsAdmins, *jwtCtx.Claims)
+	if err != nil {
+		slog.Error("Failed to compute permissions", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return imsdb.Event{}, JWTContext{}, 0, false
+	}
+	return event, jwtCtx, eventPermissions[event.ID], true
 }

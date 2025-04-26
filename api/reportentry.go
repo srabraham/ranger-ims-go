@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
@@ -14,18 +15,22 @@ import (
 type EditFieldReportReportEntry struct {
 	imsDB       *store.DB
 	eventSource *EventSourcerer
+	imsAdmins   []string
 }
 
 func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
-	author := jwtCtx.Claims.RangerHandle()
-
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
+		slog.Error("The requestor does not have permission to write Field Reports on this Event")
+		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
+
+	author := jwtCtx.Claims.RangerHandle()
 
 	var fieldReportNumber int32
 	if isInt32(req.PathValue("fieldReportNumber")) {
@@ -44,11 +49,6 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 	if !ok {
 		return
 	}
-	//
-	//bod, _ := io.ReadAll(req.Body)
-	//defer req.Body.Close()
-	//re := imsjson.ReportEntry{}
-	//_ = json.Unmarshal(bod, &re)
 
 	txn, _ := action.imsDB.Begin()
 	defer txn.Rollback()
@@ -89,18 +89,22 @@ func (action EditFieldReportReportEntry) ServeHTTP(w http.ResponseWriter, req *h
 type EditIncidentReportEntry struct {
 	imsDB       *store.DB
 	eventSource *EventSourcerer
+	imsAdmins   []string
 }
 
 func (action EditIncidentReportEntry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
-	author := jwtCtx.Claims.RangerHandle()
-
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&(auth.EventWriteIncidents) == 0 {
+		slog.Error("The requestor does not have permission to write Report Entries on this Event")
+		http.Error(w, "The requestor does not have permission to write Report Entries on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
+
+	author := jwtCtx.Claims.RangerHandle()
 
 	var incidentNumber int32
 	if isInt32(req.PathValue("incidentNumber")) {

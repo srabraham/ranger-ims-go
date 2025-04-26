@@ -2,7 +2,6 @@ package auth
 
 import (
 	"github.com/stretchr/testify/assert"
-	"log"
 	"testing"
 )
 
@@ -25,8 +24,4 @@ func TestVerifyPassword_badStoredValue(t *testing.T) {
 	noColonInThisString := "abcdefg"
 	_, err := VerifyPassword("some_password", noColonInThisString)
 	assert.Error(t, err)
-}
-
-func TestFuntime(t *testing.T) {
-	log.Printf("mask is %08b", or(RolesToGlobalPermsMask[AnyAuthenticatedUser], GlobalReadStreets))
 }

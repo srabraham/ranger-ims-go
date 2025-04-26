@@ -25,8 +25,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetEventAccesses{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
@@ -35,8 +34,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			PostEventAccess{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
@@ -63,60 +61,48 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				admins:    cfg.Core.Admins,
 			},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
 			// This endpoint does not require authentication or authorization, by design
+			ExtractJWTOptionalAuthN(j),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents",
 		Adapt(
-			GetIncidents{imsDB: db},
+			GetIncidents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			ExtractPermissionsToContext(db, cfg.Core.Admins),
-			//RequireEventPermission(auth.EventReadIncidents, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/incidents",
 		Adapt(
-			NewIncident{imsDB: db, es: es},
+			NewIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
 	mux.Handle("GET /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
-			GetIncident{imsDB: db},
+			GetIncident{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			ExtractPermissionsToContext(db, cfg.Core.Admins),
-			//RequireEventPermission(auth.EventReadIncidents, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}",
 		Adapt(
-			EditIncident{imsDB: db, es: es},
+			EditIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/incidents/{incidentNumber}/report_entries/{reportEntryId}",
 		Adapt(
-			EditIncidentReportEntry{imsDB: db, eventSource: es},
+			EditIncidentReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteIncidents, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
@@ -124,9 +110,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetFieldReports{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventReadAllFieldReports, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
@@ -134,9 +118,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			NewFieldReport{imsDB: db, eventSource: es},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
@@ -144,9 +126,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetFieldReport{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventReadAllFieldReports, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
@@ -154,19 +134,15 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditFieldReport{imsDB: db, eventSource: es},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
 	mux.Handle("POST /ims/api/events/{eventName}/field_reports/{fieldReportNumber}/report_entries/{reportEntryId}",
 		Adapt(
-			EditFieldReportReportEntry{imsDB: db, eventSource: es},
+			EditFieldReportReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
-			RequireEventPermission(auth.EventWriteAllFieldReports, db, cfg.Core.Admins),
+			ExtractJWTRequireAuthN(j),
 		),
 	)
 
@@ -174,8 +150,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			// ugh, no eventname in path
 			//RequireEventPermission(auth.EventReadEventName, db, cfg.Core.Admins),
 		),
@@ -185,8 +160,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalAdministrateEvents, db, cfg.Core.Admins),
 		),
 	)
@@ -195,8 +169,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetStreets{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalReadStreets, db, cfg.Core.Admins),
 		),
 	)
@@ -205,8 +178,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditStreets{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalAdministrateStreets, db, cfg.Core.Admins),
 		),
 	)
@@ -215,8 +187,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncidentTypes{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalReadIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
@@ -225,8 +196,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncidentTypes{imsDB: db},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalAdministrateIncidentTypes, db, cfg.Core.Admins),
 		),
 	)
@@ -235,8 +205,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetPersonnel{userStore: userStore},
 			LogBeforeAfter(),
-			ExtractClaimsToContext(j),
-			RequireAuthenticated(),
+			ExtractJWTRequireAuthN(j),
 			RequireGlobalPermission(auth.GlobalReadPersonnel, db, cfg.Core.Admins),
 		),
 	)
@@ -310,7 +279,7 @@ type PermissionsContext struct {
 	GlobalPermissions auth.GlobalPermissionMask
 }
 
-func ExtractClaimsToContext(j auth.JWTer) Adapter {
+func ExtractJWTOptionalAuthN(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -324,27 +293,26 @@ func ExtractClaimsToContext(j auth.JWTer) Adapter {
 	}
 }
 
-func RequireAuthenticated() Adapter {
+func ExtractJWTRequireAuthN(j auth.JWTer) Adapter {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
-			if !found {
-				slog.Error("the ExtractClaimsToContext adapter must be called before RequireAuthenticated")
-				http.Error(w, "This endpoint has been misconfigured. Please report this to the tech team",
-					http.StatusInternalServerError)
-				return
-			}
-			if jwtCtx.Error != nil || jwtCtx.Claims == nil {
-				slog.Error("JWT error", "error", jwtCtx.Error)
+			header := r.Header.Get("Authorization")
+			claims, err := j.AuthenticateJWT(header)
+			if err != nil || claims == nil {
+				slog.Error("JWT error", "error", err)
 				http.Error(w, "Invalid Authorization token", http.StatusUnauthorized)
 				return
 			}
-			if jwtCtx.Claims.RangerHandle() == "" {
+			if claims.RangerHandle() == "" {
 				slog.Error("No Ranger handle in JWT")
 				http.Error(w, "Invalid Authorization token", http.StatusUnauthorized)
 				return
 			}
-			next.ServeHTTP(w, r)
+			jwtCtx := context.WithValue(r.Context(), JWTContextKey, JWTContext{
+				Claims: claims,
+				Error:  err,
+			})
+			next.ServeHTTP(w, r.WithContext(jwtCtx))
 		})
 	}
 }

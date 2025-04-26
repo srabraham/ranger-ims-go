@@ -19,19 +19,16 @@ import (
 )
 
 type GetIncidents struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	perms, ok := mustGetPermissionsCtx(w, req)
+	event, _, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
-	if !ok {
-		return
-	}
-	if perms.EventPermissions[event.ID]&auth.EventReadIncidents == 0 {
+	if eventPermissions&auth.EventReadIncidents == 0 {
 		slog.Error("The requestor does not have EventReadIncidents permission on this Event")
 		http.Error(w, "The requestor does not have EventReadIncidents permission on this Event", http.StatusForbidden)
 		return
@@ -83,12 +80,17 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
 		json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
 		json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
+		lastModified := time.Unix(int64(r.Incident.Created), 0)
+		for _, re := range entriesByIncident[r.Incident.Number] {
+			if re.Created.After(lastModified) {
+				lastModified = re.Created
+			}
+		}
 		resp = append(resp, imsjson.Incident{
-			Event:   event.Name,
-			Number:  r.Incident.Number,
-			Created: time.Unix(int64(r.Incident.Created), 0),
-			// TODO: should look at report entries too
-			LastModified: time.Unix(int64(r.Incident.Created), 0),
+			Event:        event.Name,
+			Number:       r.Incident.Number,
+			Created:      time.Unix(int64(r.Incident.Created), 0),
+			LastModified: lastModified,
 			State:        string(r.Incident.State),
 			Priority:     r.Incident.Priority,
 			Summary:      stringOrNil(r.Incident.Summary),
@@ -133,19 +135,16 @@ func parseInt16(s *string) sql.NullInt16 {
 }
 
 type GetIncident struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	perms, ok := mustGetPermissionsCtx(w, req)
+	event, _, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
-	if !ok {
-		return
-	}
-	if perms.EventPermissions[event.ID]&auth.EventReadIncidents == 0 {
+	if eventPermissions&auth.EventReadIncidents == 0 {
 		slog.Error("The requestor does not have EventReadIncidents permission on this Event")
 		http.Error(w, "The requestor does not have EventReadIncidents permission on this Event", http.StatusForbidden)
 		return
@@ -188,13 +187,18 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	json.Unmarshal(storedRow.RangerHandles.([]byte), &rangerHandles)
 	json.Unmarshal(storedRow.FieldReportNumbers.([]byte), &fieldReportNumbers)
 
+	lastModified := time.Unix(int64(storedRow.Incident.Created), 0)
+	for _, re := range resultEntries {
+		if re.Created.After(lastModified) {
+			lastModified = re.Created
+		}
+	}
 	var garett = "garett"
 	result := imsjson.Incident{
-		Event:   event.Name,
-		Number:  storedRow.Incident.Number,
-		Created: time.Unix(int64(storedRow.Incident.Created), 0),
-		// TODO: should look at report entries too
-		LastModified: time.Unix(int64(storedRow.Incident.Created), 0),
+		Event:        event.Name,
+		Number:       storedRow.Incident.Number,
+		Created:      time.Unix(int64(storedRow.Incident.Created), 0),
+		LastModified: lastModified,
 		State:        string(storedRow.Incident.State),
 		Priority:     storedRow.Incident.Priority,
 		Summary:      stringOrNil(storedRow.Incident.Summary),
@@ -244,13 +248,6 @@ func fetchIncident(ctx context.Context, imsDB *store.DB, eventID, incidentNumber
 	}
 
 	return incidentRow, reportEntries, nil
-
-	//var incidentTypes imsjson.IncidentTypes
-	//var rangerHandles []string
-	//var fieldReportNumbers []int32
-	//json.Unmarshal(r.IncidentTypes.([]byte), &incidentTypes)
-	//json.Unmarshal(r.RangerHandles.([]byte), &rangerHandles)
-	//json.Unmarshal(r.FieldReportNumbers.([]byte), &fieldReportNumbers)
 }
 
 func addIncidentReportEntry(ctx context.Context, q *imsdb.Queries, eventID, incidentNum int32, author, text string, generated bool) error {
@@ -277,22 +274,27 @@ func addIncidentReportEntry(ctx context.Context, q *imsdb.Queries, eventID, inci
 }
 
 type NewIncident struct {
-	imsDB *store.DB
-	es    *EventSourcerer
+	imsDB     *store.DB
+	es        *EventSourcerer
+	imsAdmins []string
 }
 
 func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&auth.EventWriteIncidents == 0 {
+		slog.Error("The requestor does not have EventWriteIncidents permission on this Event")
+		http.Error(w, "The requestor does not have EventWriteIncidents permission on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
 	newIncident, ok := mustReadBodyAs[imsjson.Incident](w, req)
 	if !ok {
 		return
 	}
 
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
 
 	// First create the incident, to lock in the incident number reservation
@@ -308,8 +310,7 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Priority: imsjson.IncidentPriorityNormal,
 		State:    imsdb.IncidentStateNew,
 	}
-	code, err := imsdb.New(action.imsDB).CreateIncident(ctx, createTheIncident)
-	slog.Info("in newincident got", "code", code, "err", err)
+	_, err := imsdb.New(action.imsDB).CreateIncident(ctx, createTheIncident)
 	if err != nil {
 		slog.Error("error creating incident", "err", err)
 		http.Error(w, "Failed to create incident", http.StatusInternalServerError)
@@ -325,13 +326,6 @@ func (action NewIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("X-IMS-Incident-Number", fmt.Sprint(newIncident.Number))
 	w.Header().Set("Location", "/ims/api/events/"+event.Name+"/incidents/"+fmt.Sprint(newIncident.Number))
 	http.Error(w, http.StatusText(http.StatusCreated), http.StatusCreated)
-
-	//action.es.notifyIncidentUpdate(event.Name, newIncident.Number)
-	//if newIncident.FieldReports != nil {
-	//	for _, fr := range *newIncident.FieldReports {
-	//		action.es.notifyFieldReportUpdate(event.Name, fr)
-	//	}
-	//}
 }
 
 func unmarshalByteSlice[T any](isByteSlice any) (T, error) {
@@ -574,17 +568,23 @@ func sliceSubtract[T comparable](a, b []T) []T {
 }
 
 type EditIncident struct {
-	imsDB *store.DB
-	es    *EventSourcerer
+	imsDB     *store.DB
+	es        *EventSourcerer
+	imsAdmins []string
 }
 
 func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&auth.EventWriteIncidents == 0 {
+		slog.Error("The requestor does not have EventWriteIncidents permission on this Event")
+		http.Error(w, "The requestor does not have EventWriteIncidents permission on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
+
 	incidentNumber, err := strconv.ParseInt(req.PathValue("incidentNumber"), 10, 32)
 	if err != nil {
 		slog.Error("Got nonnumeric incident number", "error", err)
@@ -599,7 +599,6 @@ func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	newIncident.EventID = event.ID
 	newIncident.Number = int32(incidentNumber)
 
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
 
 	if err = updateIncident(ctx, action.imsDB, action.es, newIncident, author); err != nil {
@@ -610,27 +609,5 @@ func (action EditIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	http.Error(w, http.StatusText(http.StatusNoContent), http.StatusNoContent)
 
-	//action.es.notifyIncidentUpdate(event.Name, newIncident.Number)
-	//// TODO: need to update detached FRs too
-	//if newIncident.FieldReports != nil {
-	//	for _, fr := range *newIncident.FieldReports {
-	//		action.es.notifyFieldReportUpdate(event.Name, fr)
-	//	}
-	//}
-
-	// TODO: much stuff...try not to repeat a ton of code from the "new" action
 	return
-
-	//	ctx := req.Context()
-	//	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
-	//	if !ok {
-	//		return
-	//	}
-	//
-	//	newIncident, ok := mustReadBodyAs[imsjson.Incident](w, req)
-	//	if !ok {
-	//		return
-	//	}
-	//
-	//}
 }

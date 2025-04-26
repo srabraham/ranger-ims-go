@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/srabraham/ranger-ims-go/store/imsdb"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -15,22 +15,30 @@ import (
 )
 
 type GetFieldReports struct {
-	imsDB *store.DB
+	imsDB     *store.DB
+	imsAdmins []string
 }
 
 func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp := make(imsjson.FieldReports, 0)
-	ctx := req.Context()
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
+		return
+	}
+	if eventPermissions&(auth.EventReadAllFieldReports|auth.EventReadOwnFieldReports) == 0 {
+		slog.Error("The requestor does not have permission to read Field Reports on this Event")
+		http.Error(w, "The requestor does not have permission to read Field Reports on this Event", http.StatusForbidden)
+		return
+	}
+	// i.e. they have EventReadOwnFieldReports, but not EventReadAllFieldReports
+	limitedAccess := eventPermissions&auth.EventReadAllFieldReports == 0
 
 	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	generatedLTE := req.Form.Get("exclude_system_entries") != "true" // false means to exclude
 
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
-	if !ok {
-		return
-	}
+	ctx := req.Context()
 	reportEntries, err := imsdb.New(action.imsDB).FieldReports_ReportEntries(ctx,
 		imsdb.FieldReports_ReportEntriesParams{
 			Event:     event.ID,
@@ -58,24 +66,35 @@ func (action GetFieldReports) ServeHTTP(w http.ResponseWriter, req *http.Request
 
 	rows, err := imsdb.New(action.imsDB).FieldReports(ctx, event.ID)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, "Failed to fetch Field Reports", http.StatusInternalServerError)
 		return
 	}
 
 	for _, r := range rows {
 		fr := r.FieldReport
 		entries := entriesByFR[fr.Number]
-		resp = append(resp, imsjson.FieldReport{
-			Event:         event.Name,
-			Number:        fr.Number,
-			Created:       time.Unix(int64(fr.Created), 0),
-			Summary:       stringOrNil(fr.Summary),
-			Incident:      fr.IncidentNumber.Int32,
-			ReportEntries: entries,
-		})
+		if !limitedAccess || containsAuthor(entries, jwtCtx.Claims.RangerHandle()) {
+			resp = append(resp, imsjson.FieldReport{
+				Event:         event.Name,
+				Number:        fr.Number,
+				Created:       time.Unix(int64(fr.Created), 0),
+				Summary:       stringOrNil(fr.Summary),
+				Incident:      fr.IncidentNumber.Int32,
+				ReportEntries: entries,
+			})
+		}
 	}
 
 	mustWriteJSON(w, resp)
+}
+
+func containsAuthor(entries []imsjson.ReportEntry, author string) bool {
+	for _, e := range entries {
+		if e.Author == author {
+			return true
+		}
+	}
+	return false
 }
 
 type GetFieldReport struct {
@@ -138,13 +157,6 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			Text:          re.Text,
 			Stricken:      re.Stricken,
 			HasAttachment: re.AttachedFile.String != "",
-			//ID:            ptr(re.ID),
-			//Created:       ptr(time.Unix(int64(re.Created), 0)),
-			//Author:        ptr(re.Author),
-			//SystemEntry:   ptr(re.Generated),
-			//Text:          ptr(re.Text),
-			//Stricken:      ptr(re.Stricken),
-			//HasAttachment: ptr(re.AttachedFile.String != ""),
 		})
 	}
 	response.ReportEntries = entries
@@ -154,28 +166,36 @@ func (action GetFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 type EditFieldReport struct {
 	imsDB       *store.DB
 	eventSource *EventSourcerer
+	imsAdmins   []string
 }
 
 func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
+	if !ok {
+		return
+	}
+	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
+		slog.Error("The requestor does not have permission to write Field Reports on this Event")
+		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		return
+	}
+	// i.e. they have EventWriteOwnFieldReports, but not EventWriteAllFieldReports
+	limitedAccess := eventPermissions&auth.EventWriteAllFieldReports == 0
+
 	ctx := req.Context()
 	if ok := mustParseForm(w, req); !ok {
 		return
 	}
-
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
-	if !ok {
-		return
-	}
-
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
-	author := jwtCtx.Claims.RangerHandle()
-
 	fieldReportNumber, _ := strconv.ParseInt(req.PathValue("fieldReportNumber"), 10, 32)
-
+	author := jwtCtx.Claims.RangerHandle()
+	if limitedAccess {
+		if ok := action.mustCheckIfPreviousAuthor(w, ctx, event.ID, int32(fieldReportNumber), author); !ok {
+			return
+		}
+	}
 	queryAction := req.FormValue("action")
 	if queryAction != "" {
 		var incident sql.NullInt32
-
 		entryText := ""
 		switch queryAction {
 		case "attach":
@@ -268,17 +288,56 @@ func (action EditFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request
 	action.eventSource.notifyFieldReportUpdate(event.Name, storedFR.Number)
 }
 
+func (action EditFieldReport) mustCheckIfPreviousAuthor(
+	w http.ResponseWriter,
+	ctx context.Context,
+	eventID int32,
+	fieldReportNumber int32,
+	author string,
+) (isPreviousAuthor bool) {
+	entries, err := imsdb.New(action.imsDB).FieldReport_ReportEntries(ctx,
+		imsdb.FieldReport_ReportEntriesParams{
+			Event:             eventID,
+			FieldReportNumber: fieldReportNumber,
+		})
+	if err != nil {
+		slog.Error("Failed to get FR report entries", "error", err)
+		http.Error(w, "Failed to get FR report entries", http.StatusInternalServerError)
+		return false
+	}
+	authorMatch := false
+	for _, entry := range entries {
+		if entry.ReportEntry.Author == author {
+			authorMatch = true
+			break
+		}
+	}
+	if !authorMatch {
+		slog.Error("EditFieldReport denied to user who is not a previous author on this FieldReport")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 type NewFieldReport struct {
 	imsDB       *store.DB
 	eventSource *EventSourcerer
+	imsAdmins   []string
 }
 
 func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-	event, ok := mustGetEvent(w, req, req.PathValue("eventName"), action.imsDB)
+	event, jwtCtx, eventPermissions, ok := mustGetEventPermissions(w, req, action.imsDB, action.imsAdmins)
 	if !ok {
 		return
 	}
+	if eventPermissions&(auth.EventWriteAllFieldReports|auth.EventWriteOwnFieldReports) == 0 {
+		slog.Error("The requestor does not have permission to write Field Reports on this Event")
+		http.Error(w, "The requestor does not have permission to write Field Reports on this Event", http.StatusForbidden)
+		return
+	}
+	ctx := req.Context()
+
 	fr, ok := mustReadBodyAs[imsjson.FieldReport](w, req)
 	if !ok {
 		return
@@ -290,9 +349,7 @@ func (action NewFieldReport) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	jwtCtx := req.Context().Value(JWTContextKey).(JWTContext)
 	author := jwtCtx.Claims.RangerHandle()
-
 	numUntyped, _ := imsdb.New(action.imsDB).MaxFieldReportNumber(ctx, event.ID)
 	newFrNum := numUntyped.(int64) + 1
 

@@ -209,7 +209,7 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			eventName: {
 				ReadIncidents:     eventPermissions[event.ID]&auth.EventReadIncidents != 0,
 				WriteIncidents:    eventPermissions[event.ID]&auth.EventWriteIncidents != 0,
-				WriteFieldReports: eventPermissions[event.ID]&auth.EventWriteAllFieldReports != 0,
+				WriteFieldReports: eventPermissions[event.ID]&(auth.EventWriteOwnFieldReports|auth.EventWriteAllFieldReports) != 0,
 				AttachFiles:       false,
 			},
 		}
