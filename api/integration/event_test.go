@@ -11,7 +11,7 @@ import (
 )
 
 func TestEventAPIAuthorization(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestEventAPIAuthorization(t *testing.T) {
 }
 
 func TestGetAndEditEvent(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestGetAndEditEvent(t *testing.T) {
 		testEventName: {
 			Writers: []imsjson.AccessRule{
 				{
-					Expression: "person:" + imsCfg.Core.Admins[0],
+					Expression: "person:" + imsTestCfg.Core.Admins[0],
 					Validity:   "always",
 				},
 			},

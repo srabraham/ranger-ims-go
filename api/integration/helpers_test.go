@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/srabraham/ranger-ims-go/api"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -16,6 +17,19 @@ type ApiHelper struct {
 	t         *testing.T
 	serverURL *url.URL
 	jwt       string
+}
+
+func (a ApiHelper) postAuth(req api.PostAuthRequest) (statusCode int, body, validJWT string) {
+	response := &api.PostAuthResponse{}
+	resp := a.imsPost(req, a.serverURL.JoinPath("/ims/api/auth").String())
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, string(b), ""
+	}
+	err = json.Unmarshal(b, &response)
+	require.NoError(a.t, err)
+	return resp.StatusCode, string(b), response.Token
 }
 
 func (a ApiHelper) editTypes(req imsjson.EditIncidentTypesRequest) *http.Response {

@@ -19,7 +19,7 @@ import (
 
 var (
 	imsDBContainer testcontainers.Container
-	imsCfg         *conf.IMSConfig
+	imsTestCfg     *conf.IMSConfig
 	imsDB          *store.DB
 
 	jwtAdmin, jwtNormalUser string
@@ -40,21 +40,35 @@ func TestMain(m *testing.M) {
 }
 
 func setup(ctx context.Context) {
-	imsCfg = conf.DefaultIMS()
-	imsCfg.Core.JWTSecret = uuid.New().String()
-	imsCfg.Core.Admins = []string{"AdminRanger"}
-	imsCfg.Store.MySQL.Database = "ims"
-	imsCfg.Store.MySQL.Username = "rangers"
-	imsCfg.Store.MySQL.Password = uuid.New().String()
+	imsTestCfg = conf.DefaultIMS()
+	imsTestCfg.Core.JWTSecret = uuid.New().String()
+	imsTestCfg.Core.Admins = []string{"AdminRanger"}
+	imsTestCfg.Store.MySQL.Database = "ims"
+	imsTestCfg.Store.MySQL.Username = "rangers"
+	imsTestCfg.Store.MySQL.Password = uuid.New().String()
+	imsTestCfg.Core.Directory = conf.DirectoryTypeTestUsers
+	imsTestCfg.Directory.TestUsers = []conf.TestUser{
+		{
+			Handle:      "RealTestUserInConfig",
+			Email:       "realtestuser@rangers.brc",
+			Status:      "active",
+			DirectoryID: 80808,
+			// password is "password"
+			Password:  "salt-and-pepper:7c5b8e2d772d79374609c5c480fa93ce45e4ac5a",
+			Onsite:    true,
+			Positions: nil,
+			Teams:     nil,
+		},
+	}
 	req := testcontainers.ContainerRequest{
 		Image:        "mariadb:10.5.27",
 		ExposedPorts: []string{"3306/tcp"},
 		WaitingFor:   wait.ForListeningPort("3306/tcp"),
 		Env: map[string]string{
 			"MARIADB_RANDOM_ROOT_PASSWORD": "true",
-			"MARIADB_DATABASE":             imsCfg.Store.MySQL.Database,
-			"MARIADB_USER":                 imsCfg.Store.MySQL.Username,
-			"MARIADB_PASSWORD":             imsCfg.Store.MySQL.Password,
+			"MARIADB_DATABASE":             imsTestCfg.Store.MySQL.Database,
+			"MARIADB_USER":                 imsTestCfg.Store.MySQL.Username,
+			"MARIADB_PASSWORD":             imsTestCfg.Store.MySQL.Password,
 		},
 	}
 	var err error
@@ -74,18 +88,18 @@ func setup(ctx context.Context) {
 		panic(err)
 	}
 	port, _ := strconv.Atoi(strings.TrimPrefix(endpoint, "localhost:"))
-	imsCfg.Store.MySQL.HostPort = int32(port)
-	imsDB = &store.DB{DB: store.MariaDB(imsCfg)}
+	imsTestCfg.Store.MySQL.HostPort = int32(port)
+	imsDB = &store.DB{DB: store.MariaDB(imsTestCfg)}
 	script := "BEGIN NOT ATOMIC\n" + store.CurrentSchema + "\nEND"
 	_, err = imsDB.ExecContext(ctx, script)
 	if err != nil {
 		panic(err)
 	}
 
-	jwtAdmin = auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
-		imsCfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
+	jwtAdmin = auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
+		imsTestCfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
 	)
-	jwtNormalUser = auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
+	jwtNormalUser = auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
 		"NonAdmin Ranger", 3289, nil, nil, true, 1*time.Hour,
 	)
 }

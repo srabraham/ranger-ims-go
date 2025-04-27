@@ -13,7 +13,7 @@ import (
 )
 
 func TestIncidentTypesAPIAuthorization(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
@@ -43,13 +43,13 @@ func TestIncidentTypesAPIAuthorization(t *testing.T) {
 }
 
 func TestCreateIncident(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	jwt := auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
-		imsCfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
+	jwt := auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
+		imsTestCfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
 	)
 	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
 

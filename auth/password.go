@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func VerifyPassword(password, storedValue string) (bool, error) {
+func VerifyPassword(password, storedValue string) (isValid bool, err error) {
 	salt, storedHash, found := strings.Cut(storedValue, ":")
 	if !found {
 		return false, fmt.Errorf("invalid hashed password")

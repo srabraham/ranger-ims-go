@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"github.com/srabraham/ranger-ims-go/auth"
-	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/directory"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
@@ -59,14 +58,14 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if matchedPerson == nil {
 		handleErr(w, req, http.StatusUnauthorized, "Failed login attempt (bad credentials)",
-			fmt.Errorf("had unrecognized identification %v", vals.Identification))
+			fmt.Errorf("login attempt for nonexistent user. Identification: %v", vals.Identification))
 		return
 	}
 
 	correct, err := auth.VerifyPassword(vals.Password, matchedPerson.Password)
 	if !correct {
 		handleErr(w, req, http.StatusUnauthorized, "Failed login attempt (bad credentials)",
-			fmt.Errorf("had bad password for identification %v", vals.Identification))
+			fmt.Errorf("bad password for valid user. Identification: %v", vals.Identification))
 		return
 	}
 	if err != nil {
@@ -81,7 +80,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
+	jwt := auth.JWTer{SecretKey: action.jwtSecret}.
 		CreateJWT(matchedPerson.Handle, matchedPerson.DirectoryID, foundPositionNames, foundTeamNames, matchedPerson.Onsite, action.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 
