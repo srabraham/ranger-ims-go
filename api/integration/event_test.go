@@ -5,6 +5,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -22,12 +23,22 @@ func TestGetEvent(t *testing.T) {
 	)
 	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
 
+	jwtForNonAdminUser := auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
+		"Not an admin!", 1234, nil, nil, true, 1*time.Hour,
+	)
+	apisNonAdminUser := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForNonAdminUser}
+
 	testEventName := "MyNewEvent"
 
 	editEventReq := imsjson.EditEventsRequest{
 		Add: []string{testEventName},
 	}
-	apis.editEvent(editEventReq)
+	resp := apis.editEvent(editEventReq)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	resp = apisNonAdminUser.editEvent(editEventReq)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+
 	// editEventBytes, _ := json.Marshal(editEvent)
 	// httpPost, _ := http.NewRequest("POST", serverURL.JoinPath("/ims/api/events").String(), strings.NewReader(string(editEventBytes)))
 	// httpPost.Header.Set("Authorization", "Bearer "+jwt)
@@ -45,11 +56,13 @@ func TestGetEvent(t *testing.T) {
 			},
 		},
 	}
-	apis.editAccess(accessReq)
+	resp = apis.editAccess(accessReq)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// access := getAccess(t, serverURL, jwt)
 
-	events := apis.getEvents()
+	events, resp := apis.getEvents()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, imsjson.Events{
 		{
 			ID:   1,

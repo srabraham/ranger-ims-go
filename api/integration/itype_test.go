@@ -5,6 +5,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -32,7 +33,8 @@ func TestCreateIncident(t *testing.T) {
 	apis.editTypes(createTypes)
 
 	// All three types should now be retrievable and non-hidden
-	typesResp := apis.getTypes(false)
+	typesResp, resp := apis.getTypes(false)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, typesResp, typeA)
 	require.Contains(t, typesResp, typeB)
 	require.Contains(t, typesResp, typeC)
@@ -44,12 +46,14 @@ func TestCreateIncident(t *testing.T) {
 	apis.editTypes(hideOne)
 
 	// That type should no longer appear from the standard incident type query
-	typesVisibleOnly := apis.getTypes(false)
+	typesVisibleOnly, resp := apis.getTypes(false)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NotContains(t, typesVisibleOnly, typeA)
 	require.Contains(t, typesVisibleOnly, typeB)
 	require.Contains(t, typesVisibleOnly, typeC)
 	// but it will still appears when includeHidden=true
-	typesIncludeHidden := apis.getTypes(true)
+	typesIncludeHidden, resp := apis.getTypes(true)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, typesIncludeHidden, typeA)
 	require.Contains(t, typesIncludeHidden, typeB)
 	require.Contains(t, typesIncludeHidden, typeC)
@@ -60,7 +64,8 @@ func TestCreateIncident(t *testing.T) {
 	}
 	apis.editTypes(showItAgain)
 	// and see that it's back in the standard incident type query results
-	typesVisibleOnly = apis.getTypes(false)
+	typesVisibleOnly, resp = apis.getTypes(false)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Contains(t, typesVisibleOnly, typeA)
 	require.Contains(t, typesVisibleOnly, typeB)
 	require.Contains(t, typesVisibleOnly, typeC)

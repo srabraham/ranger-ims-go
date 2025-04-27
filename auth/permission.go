@@ -11,6 +11,14 @@ import (
 
 type Role string
 
+var (
+	modeToRole = map[imsdb.EventAccessMode]Role{
+		imsdb.EventAccessModeRead:   EventReader,
+		imsdb.EventAccessModeWrite:  EventWriter,
+		imsdb.EventAccessModeReport: EventReporter,
+	}
+)
+
 const (
 	AnyAuthenticatedUser Role = "AnyAuthenticatedUser"
 	EventReporter        Role = "EventReporter"
@@ -95,12 +103,6 @@ func ManyEventPermissions(
 	eventPermissions = make(map[int32]EventPermissionMask)
 	globalPermissions = GlobalNoPermissions
 
-	translate := map[imsdb.EventAccessMode]Role{
-		imsdb.EventAccessModeRead:   EventReader,
-		imsdb.EventAccessModeWrite:  EventWriter,
-		imsdb.EventAccessModeReport: EventReporter,
-	}
-
 	if handle != "" {
 		globalPermissions |= RolesToGlobalPerms[AnyAuthenticatedUser]
 	}
@@ -136,7 +138,7 @@ func ManyEventPermissions(
 				matchValidity = true
 			}
 			if matchExpr && matchValidity {
-				eventPermissions[eventID] |= RolesToEventPerms[translate[ea.Mode]]
+				eventPermissions[eventID] |= RolesToEventPerms[modeToRole[ea.Mode]]
 			}
 		}
 	}
