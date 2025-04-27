@@ -120,6 +120,7 @@ type StoreMySQL struct {
 
 type TestUser struct {
 	Handle      string
+	Email       string
 	Status      string
 	DirectoryID int64
 	Password    string

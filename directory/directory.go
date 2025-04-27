@@ -34,6 +34,8 @@ func (users UserStore) GetRangers(ctx context.Context) ([]imsjson.Person, error)
 		for _, user := range users.testUsers {
 			response = append(response, imsjson.Person{
 				Handle:      user.Handle,
+				Email:       user.Email,
+				Password:    user.Password,
 				Status:      user.Status,
 				Onsite:      user.Onsite,
 				DirectoryID: user.DirectoryID,
