@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/directory"
@@ -39,8 +40,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	rangers, err := action.userStore.GetRangers(req.Context())
 	if err != nil {
-		slog.Error("Failed to get personnel", "error", err)
-		http.Error(w, "Failed to get personnel", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch personnel", err)
 		return
 	}
 	var matchedPerson *imsjson.Person
@@ -58,27 +58,26 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if matchedPerson == nil {
-		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
-		w.WriteHeader(http.StatusUnauthorized)
+		handleErr(w, req, http.StatusUnauthorized, "Failed login attempt (bad credentials)",
+			fmt.Errorf("had unrecognized identification %v", vals.Identification))
 		return
 	}
 
 	correct, err := auth.VerifyPassword(vals.Password, matchedPerson.Password)
 	if !correct {
-		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
-		w.WriteHeader(http.StatusUnauthorized)
+		handleErr(w, req, http.StatusUnauthorized, "Failed login attempt (bad credentials)",
+			fmt.Errorf("had bad password for identification %v", vals.Identification))
 		return
 	}
 	if err != nil {
 		handleErr(w, req, http.StatusInternalServerError, "Failed to verify password", err)
 		return
 	}
-	slog.Info("Successful login", "identification", vals.Identification)
+	slog.Info("Successful login for Ranger", "identification", matchedPerson.Handle)
 
 	foundPositionNames, foundTeamNames, err := action.userStore.GetUserPositionsTeams(req.Context(), matchedPerson.DirectoryID)
 	if err != nil {
-		slog.Error("Failed to fetch Clubhouse positions/teams data", "error", err)
-		http.Error(w, "Failed to fetch Clubhouse positions/teams data", http.StatusInternalServerError)
+		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Clubhouse positions/teams data", err)
 		return
 	}
 
@@ -129,23 +128,19 @@ func (action GetAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	resp.User = handle
 	resp.Admin = slices.Contains(roles, auth.Administrator)
 
-	if err := req.ParseForm(); err != nil {
-		slog.Error("mustParseForm error", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+	if ok := mustParseForm(w, req); !ok {
 		return
 	}
 	eventName := req.Form.Get("event_id")
 	if eventName != "" {
-
-		event, ok := mustEventFromFormValue(w, req, action.imsDB)
+		event, ok := mustGetEvent(w, req, eventName, action.imsDB)
 		if !ok {
 			return
 		}
 
 		eventPermissions, _, err := auth.EventPermissions(req.Context(), &event.ID, action.imsDB, action.admins, *claims)
 		if err != nil {
-			slog.Error("Failed to compute permissions", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			handleErr(w, req, http.StatusInternalServerError, "Failed to fetch event permissions", err)
 			return
 		}
 
