@@ -47,7 +47,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var userID int64
 	var onsite bool
 	for _, person := range rangers {
-		callsignMatch := person.Handle == vals.Identification
+		callsignMatch := person.Handle != "" && person.Handle == vals.Identification
 		emailMatch := person.Email != "" && strings.ToLower(person.Email) == strings.ToLower(vals.Identification)
 		if callsignMatch || emailMatch {
 			storedHandle = person.Handle
@@ -58,10 +58,14 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	correct, _ := auth.VerifyPassword(vals.Password, storedPassHash)
+	correct, err := auth.VerifyPassword(vals.Password, storedPassHash)
 	if correct {
 		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		handleErr(w, req, http.StatusInternalServerError, "Failed to verify password", err)
 		return
 	}
 	slog.Info("Successful login", "identification", vals.Identification)
