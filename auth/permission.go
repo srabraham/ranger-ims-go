@@ -23,6 +23,11 @@ type GlobalPermissionMask uint16
 type EventPermissionMask uint16
 
 const (
+	EventNoPermissions  EventPermissionMask  = 0
+	GlobalNoPermissions GlobalPermissionMask = 0
+)
+
+const (
 	// Event-specific permissions
 
 	EventReadIncidents EventPermissionMask = 1 << iota
@@ -46,63 +51,16 @@ const (
 	GlobalAdministrateIncidentTypes
 )
 
-//var RolesToGlobalPerms = map[Role]map[GlobalPermissionMask]bool{
-//	AnyAuthenticatedUser: {
-//		GlobalListEvents:        true,
-//		GlobalReadIncidentTypes: true,
-//		GlobalReadPersonnel:     true,
-//		GlobalReadStreets:       true,
-//	},
-//	Administrator: {
-//		GlobalAdministrateEvents:        true,
-//		GlobalAdministrateStreets:       true,
-//		GlobalAdministrateIncidentTypes: true,
-//	},
-//}
-
 var RolesToGlobalPerms = map[Role]GlobalPermissionMask{
 	AnyAuthenticatedUser: GlobalListEvents | GlobalReadIncidentTypes | GlobalReadPersonnel | GlobalReadStreets,
 	Administrator:        GlobalAdministrateEvents | GlobalAdministrateStreets | GlobalAdministrateIncidentTypes,
 }
 
 var RolesToEventPerms = map[Role]EventPermissionMask{
-	//AnyAuthenticatedUser: {
-	//	GlobalReadIncidentTypes: true,
-	//	GlobalReadPersonnel:     true,
-	//	GlobalReadStreets:       true,
-	//},
 	EventReporter: EventReadEventName | EventReadOwnFieldReports | EventWriteOwnFieldReports,
 	EventReader:   EventReadEventName | EventReadIncidents | EventReadOwnFieldReports | EventReadAllFieldReports,
 	EventWriter:   EventReadEventName | EventReadIncidents | EventWriteIncidents | EventReadAllFieldReports | EventReadOwnFieldReports | EventWriteAllFieldReports | EventWriteOwnFieldReports,
 }
-
-//var RolesToPerms = map[Role]map[EventPermissionMask]bool{
-//	//AnyAuthenticatedUser: {
-//	//	GlobalReadIncidentTypes: true,
-//	//	GlobalReadPersonnel:     true,
-//	//	GlobalReadStreets:       true,
-//	//},
-//	EventReporter: {
-//		EventReadEventName:        true,
-//		EventReadOwnFieldReports:  true,
-//		EventWriteOwnFieldReports: true,
-//	},
-//	EventReader: {
-//		EventReadEventName:       true,
-//		EventReadIncidents:       true,
-//		EventReadOwnFieldReports: true,
-//		EventReadAllFieldReports: true,
-//	},
-//	EventWriter: {
-//		EventReadEventName:        true,
-//		EventReadIncidents:        true,
-//		EventWriteIncidents:       true,
-//		EventReadAllFieldReports:  true,
-//		EventReadOwnFieldReports:  true,
-//		EventWriteAllFieldReports: true,
-//		EventWriteOwnFieldReports: true,
-//	},
-//}
 
 func EventPermissions(
 	ctx context.Context,
@@ -115,18 +73,17 @@ func EventPermissions(
 	if eventID != nil {
 		accessRows, err := imsdb.New(imsDB).EventAccess(ctx, *eventID)
 		if err != nil {
-			return nil, 0, fmt.Errorf("EventAccess: %w", err)
+			return nil, GlobalNoPermissions, fmt.Errorf("EventAccess: %w", err)
 		}
 		for _, ea := range accessRows {
 			accessByEvent[*eventID] = append(accessByEvent[*eventID], ea.EventAccess)
 		}
 	}
-	//eventPermissions, globalPermissions = MultiEventPermissions(accessByEvent, imsAdmins, claims)
-	eventPermissions, globalPermissions = MultiEventPermissions(accessByEvent, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
+	eventPermissions, globalPermissions = ManyEventPermissions(accessByEvent, imsAdmins, claims.RangerHandle(), claims.RangerOnSite(), claims.RangerPositions(), claims.RangerTeams())
 	return eventPermissions, globalPermissions, nil
 }
 
-func MultiEventPermissions(
+func ManyEventPermissions(
 	accessByEvent map[int32][]imsdb.EventAccess, // eventID as key
 	imsAdmins []string,
 	handle string,
@@ -136,7 +93,7 @@ func MultiEventPermissions(
 ) (eventPermissions map[int32]EventPermissionMask, globalPermissions GlobalPermissionMask) {
 
 	eventPermissions = make(map[int32]EventPermissionMask)
-	globalPermissions = 0
+	globalPermissions = GlobalNoPermissions
 
 	translate := map[imsdb.EventAccessMode]Role{
 		imsdb.EventAccessModeRead:   EventReader,
@@ -153,7 +110,7 @@ func MultiEventPermissions(
 	}
 
 	for eventID, accesses := range accessByEvent {
-		eventPermissions[eventID] = 0 // make(map[EventPermissionMask]bool)
+		eventPermissions[eventID] = EventNoPermissions
 		for _, ea := range accesses {
 			matchExpr := false
 			if ea.Expression == "*" {

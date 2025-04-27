@@ -74,7 +74,7 @@ func (action GetEvents) permissionsByEvent(ctx context.Context, jwtCtx JWTContex
 		accessRowByEventID[ar.EventAccess.Event] = append(accessRowByEventID[ar.EventAccess.Event], ar.EventAccess)
 	}
 
-	permissionsByEvent, _ := auth.MultiEventPermissions(
+	permissionsByEvent, _ := auth.ManyEventPermissions(
 		accessRowByEventID,
 		action.imsAdmins,
 		jwtCtx.Claims.RangerHandle(),

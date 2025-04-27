@@ -1,16 +1,12 @@
 package integration
 
 import (
-	"encoding/json"
 	"github.com/srabraham/ranger-ims-go/api"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
-	"io"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 	"time"
 )
@@ -24,22 +20,20 @@ func TestGetEvent(t *testing.T) {
 	jwt := auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
 		imsCfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
 	)
-
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
 
 	testEventName := "MyNewEvent"
 
-	editEvent := imsjson.EditEventsRequest{
+	editEventReq := imsjson.EditEventsRequest{
 		Add: []string{testEventName},
 	}
-	editEventBytes, _ := json.Marshal(editEvent)
-	httpPost, _ := http.NewRequest("POST", serverURL.JoinPath("/ims/api/events").String(), strings.NewReader(string(editEventBytes)))
-	httpPost.Header.Set("Authorization", "Bearer "+jwt)
-	resp, err := httpClient.Do(httpPost)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	apis.editEvent(editEventReq)
+	// editEventBytes, _ := json.Marshal(editEvent)
+	// httpPost, _ := http.NewRequest("POST", serverURL.JoinPath("/ims/api/events").String(), strings.NewReader(string(editEventBytes)))
+	// httpPost.Header.Set("Authorization", "Bearer "+jwt)
+	// resp, err := httpClient.Do(httpPost)
+	// require.NoError(t, err)
+	// require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	accessReq := imsjson.EventsAccess{
 		testEventName: {
@@ -51,25 +45,11 @@ func TestGetEvent(t *testing.T) {
 			},
 		},
 	}
-	accessReqBytes, _ := json.Marshal(accessReq)
-	httpPost, _ = http.NewRequest("POST", serverURL.JoinPath("/ims/api/access").String(), strings.NewReader(string(accessReqBytes)))
-	httpPost.Header.Set("Authorization", "Bearer "+jwt)
-	resp, err = httpClient.Do(httpPost)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	apis.editAccess(accessReq)
 
-	httpReq, _ := http.NewRequest("GET", serverURL.JoinPath("/ims/api/events").String(), nil)
-	httpReq.Header.Set("Authorization", "Bearer "+jwt)
-	get, err := httpClient.Do(httpReq)
-	require.NoError(t, err)
-	defer get.Body.Close()
-	b, err := io.ReadAll(get.Body)
-	require.NoError(t, err)
+	// access := getAccess(t, serverURL, jwt)
 
-	var events imsjson.Events
-	err = json.Unmarshal(b, &events)
-	require.NoError(t, err)
-
+	events := apis.getEvents()
 	require.Equal(t, imsjson.Events{
 		{
 			ID:   1,
