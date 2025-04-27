@@ -118,7 +118,7 @@ func (action PostEventAccess) ServeHTTP(w http.ResponseWriter, req *http.Request
 }
 
 func (action PostEventAccess) maybeSetAccess(ctx context.Context, event imsdb.Event, rules []imsjson.AccessRule, mode imsdb.EventAccessMode) error {
-	if len(rules) == 0 {
+	if rules == nil {
 		return nil
 	}
 
