@@ -12,6 +12,10 @@ import (
 )
 
 func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig) *http.ServeMux {
+	if mux == nil {
+		mux = http.NewServeMux()
+	}
+
 	mux.Handle("GET /ims/static/",
 		Adapt(
 			http.StripPrefix("/ims/", http.FileServerFS(StaticFS)).ServeHTTP,
