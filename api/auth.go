@@ -42,6 +42,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to get personnel", http.StatusInternalServerError)
 		return
 	}
+	var storedHandle string
 	var storedPassHash string
 	var userID int64
 	var onsite bool
@@ -49,6 +50,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		callsignMatch := person.Handle == vals.Identification
 		emailMatch := person.Email != "" && strings.ToLower(person.Email) == strings.ToLower(vals.Identification)
 		if callsignMatch || emailMatch {
+			storedHandle = person.Handle
 			userID = person.DirectoryID
 			storedPassHash = person.Password
 			onsite = person.Onsite
@@ -72,7 +74,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
-		CreateJWT(vals.Identification, userID, foundPositionNames, foundTeamNames, onsite, action.jwtDuration)
+		CreateJWT(storedHandle, userID, foundPositionNames, foundTeamNames, onsite, action.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 
 	mustWriteJSON(w, resp)
