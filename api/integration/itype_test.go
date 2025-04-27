@@ -12,6 +12,36 @@ import (
 	"time"
 )
 
+func TestIncidentTypesAPIAuthorization(t *testing.T) {
+	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	defer s.Close()
+	serverURL, err := url.Parse(s.URL)
+	require.NoError(t, err)
+
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtNormalUser}
+	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
+
+	// Any authenticated user can call GetIncidentTypes
+	_, resp := apisNotAuthenticated.getTypes(false)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	_, resp = apisNonAdmin.getTypes(false)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	_, resp = apisAdmin.getTypes(false)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Only admins can hit the EditIncidentTypes endpoint
+	// An unauthenticated client will get a 401
+	// An unauthorized user will get a 403
+	editTypesReq := imsjson.EditIncidentTypesRequest{}
+	resp = apisNotAuthenticated.editTypes(editTypesReq)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.editTypes(editTypesReq)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp = apisAdmin.editTypes(editTypesReq)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
 func TestCreateIncident(t *testing.T) {
 	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
 	defer s.Close()

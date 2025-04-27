@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/testcontainers/testcontainers-go"
@@ -13,12 +14,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
 	imsDBContainer testcontainers.Container
 	imsCfg         *conf.IMSConfig
 	imsDB          *store.DB
+
+	jwtAdmin, jwtNormalUser string
 )
 
 func TestMain(m *testing.M) {
@@ -77,6 +81,13 @@ func setup(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+
+	jwtAdmin = auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
+		imsCfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
+	)
+	jwtNormalUser = auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
+		"NonAdmin Ranger", 3289, nil, nil, true, 1*time.Hour,
+	)
 }
 
 func shutdown(ctx context.Context) {

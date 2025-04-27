@@ -2,49 +2,60 @@ package integration
 
 import (
 	"github.com/srabraham/ranger-ims-go/api"
-	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 )
 
-func TestGetEvent(t *testing.T) {
+func TestEventAPIAuthorization(t *testing.T) {
 	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	jwt := auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
-		imsCfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
-	)
-	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtNormalUser}
+	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
-	jwtForNonAdminUser := auth.JWTer{SecretKey: imsCfg.Core.JWTSecret}.CreateJWT(
-		"Not an admin!", 1234, nil, nil, true, 1*time.Hour,
-	)
-	apisNonAdminUser := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForNonAdminUser}
+	// Any authenticated user can call GetEvents
+	_, resp := apisNotAuthenticated.getEvents()
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	_, resp = apisNonAdmin.getEvents()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	_, resp = apisAdmin.getEvents()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Only admins can hit the EditEvents endpoint
+	// An unauthenticated client will get a 401
+	// An unauthorized user will get a 403
+	editEventReq := imsjson.EditEventsRequest{}
+	resp = apisNotAuthenticated.editEvent(editEventReq)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.editEvent(editEventReq)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp = apisAdmin.editEvent(editEventReq)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestGetAndEditEvent(t *testing.T) {
+	s := httptest.NewServer(api.AddToMux(nil, imsCfg, imsDB, nil))
+	defer s.Close()
+	serverURL, err := url.Parse(s.URL)
+	require.NoError(t, err)
+
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
 
 	testEventName := "MyNewEvent"
 
 	editEventReq := imsjson.EditEventsRequest{
 		Add: []string{testEventName},
 	}
-	resp := apis.editEvent(editEventReq)
+
+	resp := apisAdmin.editEvent(editEventReq)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-
-	resp = apisNonAdminUser.editEvent(editEventReq)
-	require.Equal(t, http.StatusForbidden, resp.StatusCode)
-
-	// editEventBytes, _ := json.Marshal(editEvent)
-	// httpPost, _ := http.NewRequest("POST", serverURL.JoinPath("/ims/api/events").String(), strings.NewReader(string(editEventBytes)))
-	// httpPost.Header.Set("Authorization", "Bearer "+jwt)
-	// resp, err := httpClient.Do(httpPost)
-	// require.NoError(t, err)
-	// require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	accessReq := imsjson.EventsAccess{
 		testEventName: {
@@ -56,12 +67,10 @@ func TestGetEvent(t *testing.T) {
 			},
 		},
 	}
-	resp = apis.editAccess(accessReq)
+	resp = apisAdmin.editAccess(accessReq)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
-	// access := getAccess(t, serverURL, jwt)
-
-	events, resp := apis.getEvents()
+	events, resp := apisAdmin.getEvents()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, imsjson.Events{
 		{

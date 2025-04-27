@@ -313,7 +313,7 @@ func RequireAuthN(j auth.JWTer) Adapter {
 			header := r.Header.Get("Authorization")
 			claims, err := j.AuthenticateJWT(header)
 			if err != nil || claims == nil {
-				slog.Error("JWT error", "error", err)
+				slog.Error("Failed to authenticate JWT", "error", err)
 				http.Error(w, "Invalid Authorization token", http.StatusUnauthorized)
 				return
 			}

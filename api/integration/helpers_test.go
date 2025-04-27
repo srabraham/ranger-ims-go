@@ -58,7 +58,9 @@ func (a ApiHelper) imsPost(body any, path string) *http.Response {
 	require.NoError(a.t, err)
 	httpPost, err := http.NewRequest("POST", path, bytes.NewReader(postBody))
 	require.NoError(a.t, err)
-	httpPost.Header.Set("Authorization", "Bearer "+a.jwt)
+	if a.jwt != "" {
+		httpPost.Header.Set("Authorization", "Bearer "+a.jwt)
+	}
 	resp, err := httpClient.Do(httpPost)
 	require.NoError(a.t, err)
 	return resp
@@ -71,12 +73,17 @@ func (a ApiHelper) imsGet(path string, resp any) (any, *http.Response) {
 	}
 	httpReq, err := http.NewRequest("GET", path, nil)
 	require.NoError(a.t, err)
-	httpReq.Header.Set("Authorization", "Bearer "+a.jwt)
+	if a.jwt != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+a.jwt)
+	}
 	get, err := httpClient.Do(httpReq)
 	require.NoError(a.t, err)
 	defer get.Body.Close()
 	b, err := io.ReadAll(get.Body)
 	require.NoError(a.t, err)
+	if get.StatusCode != http.StatusOK {
+		return resp, get
+	}
 	err = json.Unmarshal(b, &resp)
 	require.NoError(a.t, err)
 	return resp, get
