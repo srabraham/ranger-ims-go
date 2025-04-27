@@ -4,6 +4,7 @@ import (
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/directory"
+	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
 	"log/slog"
 	"net/http"
@@ -42,24 +43,28 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to get personnel", http.StatusInternalServerError)
 		return
 	}
-	var storedHandle string
-	var storedPassHash string
-	var userID int64
-	var onsite bool
+	var matchedPerson *imsjson.Person
 	for _, person := range rangers {
 		callsignMatch := person.Handle != "" && person.Handle == vals.Identification
+		if callsignMatch {
+			matchedPerson = &person
+			break
+		}
 		emailMatch := person.Email != "" && strings.ToLower(person.Email) == strings.ToLower(vals.Identification)
-		if callsignMatch || emailMatch {
-			storedHandle = person.Handle
-			userID = person.DirectoryID
-			storedPassHash = person.Password
-			onsite = person.Onsite
+		if emailMatch {
+			matchedPerson = &person
 			break
 		}
 	}
 
-	correct, err := auth.VerifyPassword(vals.Password, storedPassHash)
-	if correct {
+	if matchedPerson == nil {
+		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	correct, err := auth.VerifyPassword(vals.Password, matchedPerson.Password)
+	if !correct {
 		slog.Error("Failed login attempt (bad credentials)", "identification", vals.Identification)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -70,7 +75,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	slog.Info("Successful login", "identification", vals.Identification)
 
-	foundPositionNames, foundTeamNames, err := action.userStore.GetUserPositionsTeams(req.Context(), userID)
+	foundPositionNames, foundTeamNames, err := action.userStore.GetUserPositionsTeams(req.Context(), matchedPerson.DirectoryID)
 	if err != nil {
 		slog.Error("Failed to fetch Clubhouse positions/teams data", "error", err)
 		http.Error(w, "Failed to fetch Clubhouse positions/teams data", http.StatusInternalServerError)
@@ -78,7 +83,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	jwt := auth.JWTer{SecretKey: conf.Cfg.Core.JWTSecret}.
-		CreateJWT(storedHandle, userID, foundPositionNames, foundTeamNames, onsite, action.jwtDuration)
+		CreateJWT(matchedPerson.Handle, matchedPerson.DirectoryID, foundPositionNames, foundTeamNames, matchedPerson.Onsite, action.jwtDuration)
 	resp := PostAuthResponse{Token: jwt}
 
 	mustWriteJSON(w, resp)
