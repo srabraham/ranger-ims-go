@@ -144,9 +144,9 @@ where
 ;
 
 -- name: ConcentricStreets :many
-select sqlc.embed(CONCENTRIC_STREET)
-from CONCENTRIC_STREET
-where EVENT = ?;
+select sqlc.embed(cs)
+from CONCENTRIC_STREET cs
+where cs.EVENT = ?;
 
 -- name: IncidentTypes :many
 select sqlc.embed(it)

@@ -191,9 +191,9 @@ func (q *Queries) ClearEventAccessForMode(ctx context.Context, arg ClearEventAcc
 }
 
 const concentricStreets = `-- name: ConcentricStreets :many
-select concentric_street.event, concentric_street.id, concentric_street.name
-from CONCENTRIC_STREET
-where EVENT = ?
+select cs.event, cs.id, cs.name
+from CONCENTRIC_STREET cs
+where cs.EVENT = ?
 `
 
 type ConcentricStreetsRow struct {
