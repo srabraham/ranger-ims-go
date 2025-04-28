@@ -11,10 +11,12 @@ import (
 const EventSourceChannel = "imsevents"
 
 type IMSEventData struct {
+	// EventName an IMS Event Name, e.g. "2025"
 	EventName string `json:"event_name,omitzero"`
 	Comment   string `json:"comment,omitzero"`
 
-	// Exactly one of the below three fields must be set, as this indicates the type of IMS SSE.
+	// Exactly one of IncidentNumber, FieldReportNumber, or InitialEvent must be set,
+	// as this indicates the type of IMS SSE.
 
 	IncidentNumber    int32 `json:"incident_number,omitzero"`
 	FieldReportNumber int32 `json:"field_report_number,omitzero"`
