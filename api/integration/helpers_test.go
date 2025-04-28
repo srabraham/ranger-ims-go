@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/srabraham/ranger-ims-go/api"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,16 @@ func (a ApiHelper) getTypes(includeHidden bool) (imsjson.IncidentTypes, *http.Re
 	}
 	bod, resp := a.imsGet(path, &imsjson.IncidentTypes{})
 	return *bod.(*imsjson.IncidentTypes), resp
+}
+
+func (a ApiHelper) newIncident(req imsjson.Incident) *http.Response {
+	return a.imsPost(req, a.serverURL.JoinPath("/ims/api/events/"+req.Event+"/incidents").String())
+}
+
+func (a ApiHelper) getIncident(eventName string, incident int32) (imsjson.Incident, *http.Response) {
+	path := a.serverURL.JoinPath(fmt.Sprint("/ims/api/events/", eventName, "/incidents/", incident)).String()
+	bod, resp := a.imsGet(path, &imsjson.Incident{})
+	return *bod.(*imsjson.Incident), resp
 }
 
 func (a ApiHelper) editEvent(req imsjson.EditEventsRequest) *http.Response {
