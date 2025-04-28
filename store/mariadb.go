@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/srabraham/ranger-ims-go/conf"
-	"log"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 )
@@ -17,6 +17,8 @@ import (
 var CurrentSchema string
 
 func MariaDB(imsCfg *conf.IMSConfig) *sql.DB {
+	slog.Info("Setting up IMS DB connection")
+
 	// Capture connection properties.
 	cfg := mysql.NewConfig()
 	cfg.User = imsCfg.Store.MySQL.Username
@@ -28,12 +30,16 @@ func MariaDB(imsCfg *conf.IMSConfig) *sql.DB {
 	// Get a database handle.
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to open IMS DB connection", "error", err)
+		os.Exit(1)
 	}
+	// Some arbitrary value. We'll get errors from MariaDB if the server
+	// hits the DB with too many parallel requests.
 	db.SetMaxOpenConns(20)
 	pingErr := db.Ping()
 	if pingErr != nil {
-		log.Panic(pingErr)
+		slog.Error("Failed ping attempt to IMS DB", "error", pingErr)
+		os.Exit(1)
 	}
 	slog.Info("Connected to IMS MariaDB")
 	return db

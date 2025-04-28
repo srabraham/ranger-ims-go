@@ -2,8 +2,8 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/store"
@@ -41,11 +41,11 @@ func TestMain(m *testing.M) {
 
 func setup(ctx context.Context) {
 	imsTestCfg = conf.DefaultIMS()
-	imsTestCfg.Core.JWTSecret = uuid.New().String()
+	imsTestCfg.Core.JWTSecret = rand.Text()
 	imsTestCfg.Core.Admins = []string{"AdminRanger"}
 	imsTestCfg.Store.MySQL.Database = "ims"
 	imsTestCfg.Store.MySQL.Username = "rangers"
-	imsTestCfg.Store.MySQL.Password = uuid.New().String()
+	imsTestCfg.Store.MySQL.Password = rand.Text()
 	imsTestCfg.Core.Directory = conf.DirectoryTypeTestUsers
 	imsTestCfg.Directory.TestUsers = []conf.TestUser{
 		{

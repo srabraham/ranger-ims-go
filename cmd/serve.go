@@ -24,30 +24,33 @@ var serveCmd = &cobra.Command{
 }
 
 func runServer(cmd *cobra.Command, args []string) {
+	imsCfg := conf.Cfg
+
 	var logLevel slog.Level
-	must(logLevel.UnmarshalText([]byte(conf.Cfg.Core.LogLevel)))
+	must(logLevel.UnmarshalText([]byte(imsCfg.Core.LogLevel)))
 	slog.SetLogLoggerLevel(logLevel)
 
-	log.Printf("Have config\n%v", conf.Cfg)
+	log.Printf("Have config\n%v", imsCfg)
+	log.Printf("With JWTSecret: %v...%v", imsCfg.Core.JWTSecret[:1], imsCfg.Core.JWTSecret[len(imsCfg.Core.JWTSecret)-1:])
 
 	var userStore *directory.UserStore
 	var err error
-	switch conf.Cfg.Core.Directory {
+	switch imsCfg.Core.Directory {
 	case conf.DirectoryTypeClubhouseDB:
-		userStore, err = directory.NewUserStore(nil, directory.MariaDB())
+		userStore, err = directory.NewUserStore(nil, directory.MariaDB(imsCfg))
 	case conf.DirectoryTypeTestUsers:
-		userStore, err = directory.NewUserStore(conf.Cfg.Directory.TestUsers, nil)
+		userStore, err = directory.NewUserStore(imsCfg.Directory.TestUsers, nil)
 	default:
-		err = fmt.Errorf("unknown directory %v", conf.Cfg.Core.Directory)
+		err = fmt.Errorf("unknown directory %v", imsCfg.Core.Directory)
 	}
 	must(err)
-	imsDB := store.MariaDB(conf.Cfg)
+	imsDB := store.MariaDB(imsCfg)
 
 	mux := http.NewServeMux()
-	api.AddToMux(mux, conf.Cfg, &store.DB{DB: imsDB}, userStore)
-	web.AddToMux(mux, conf.Cfg)
+	api.AddToMux(mux, imsCfg, &store.DB{DB: imsDB}, userStore)
+	web.AddToMux(mux, imsCfg)
 
-	addr := fmt.Sprintf("%v:%v", conf.Cfg.Core.Host, conf.Cfg.Core.Port)
+	addr := fmt.Sprintf("%v:%v", imsCfg.Core.Host, imsCfg.Core.Port)
 	s := &http.Server{
 		Addr:        addr,
 		Handler:     mux,

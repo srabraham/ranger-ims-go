@@ -43,8 +43,12 @@ func init() {
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-		viper.SetConfigType("toml")
+		_, err := os.Stat(cfgFile)
+		// i.e. if the file does exist
+		if !os.IsNotExist(err) {
+			viper.SetConfigFile(cfgFile)
+			viper.SetConfigType("toml")
+		}
 	}
 
 	// e.g. we look for environment variables like IMS_CORE_LOGLEVEL,
@@ -61,17 +65,24 @@ func initConfig() {
 			must(viper.BindEnv(strings.Join(strings.Split(k, "_")[1:], ".")))
 		}
 	}
-	// If a config file is found, read it in.
-	must(viper.ReadInConfig())
-	slog.Info("Using config file", "file", viper.ConfigFileUsed())
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found; ignore error if desired
+		} else {
+			panic(err)
+		}
+	} else {
+		slog.Info("Using config file", "file", viper.ConfigFileUsed())
+	}
 
 	newCfg := conf.DefaultIMS()
 	must(viper.Unmarshal(&newCfg))
 	conf.Cfg = newCfg
+	imsCfg := conf.Cfg
 
-	must(conf.Cfg.Core.Directory.Validate())
-	if conf.Cfg.Core.Deployment != "dev" {
-		if conf.Cfg.Core.Directory == conf.DirectoryTypeTestUsers {
+	must(imsCfg.Core.Directory.Validate())
+	if imsCfg.Core.Deployment != "dev" {
+		if imsCfg.Core.Directory == conf.DirectoryTypeTestUsers {
 			must(fmt.Errorf("do not use TestUsers outside dev! A ClubhouseDB must be provided"))
 		}
 	}

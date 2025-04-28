@@ -6,32 +6,38 @@ import (
 	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/srabraham/ranger-ims-go/conf"
-	"log"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 )
 
-func MariaDB() *DB {
+func MariaDB(imsCfg *conf.IMSConfig) *DB {
+	slog.Info("Setting up Clubhouse DB connection")
+
 	// Capture connection properties.
 	cfg := mysql.NewConfig()
-	cfg.User = conf.Cfg.Directory.ClubhouseDB.Username
-	cfg.Passwd = conf.Cfg.Directory.ClubhouseDB.Password
+	cfg.User = imsCfg.Directory.ClubhouseDB.Username
+	cfg.Passwd = imsCfg.Directory.ClubhouseDB.Password
 	cfg.Net = "tcp"
-	cfg.Addr = fmt.Sprintf("%v:%v", conf.Cfg.Directory.ClubhouseDB.Hostname, conf.Cfg.Directory.ClubhouseDB.HostPort)
-	cfg.DBName = conf.Cfg.Directory.ClubhouseDB.Database
+	cfg.Addr = fmt.Sprintf("%v:%v", imsCfg.Directory.ClubhouseDB.Hostname, imsCfg.Directory.ClubhouseDB.HostPort)
+	cfg.DBName = imsCfg.Directory.ClubhouseDB.Database
 
 	// Get a database handle.
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to open Clubhouse DB connection", "error", err)
+		os.Exit(1)
 	}
-
+	// Some arbitrary value. We'll get errors from MariaDB if the server
+	// hits the DB with too many parallel requests.
+	db.SetMaxOpenConns(20)
 	pingErr := db.Ping()
 	if pingErr != nil {
-		log.Fatal(pingErr)
+		slog.Error("Failed ping attempt to Clubhouse DB", "error", pingErr)
+		os.Exit(1)
 	}
-	fmt.Println("Connected!")
+	slog.Info("Connected to IMS MariaDB")
 	return &DB{DB: db}
 }
 

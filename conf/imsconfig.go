@@ -1,9 +1,9 @@
 package conf
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 )
 
 var Cfg *IMSConfig
@@ -14,11 +14,13 @@ var Cfg *IMSConfig
 func DefaultIMS() *IMSConfig {
 	return &IMSConfig{
 		Core: ConfigCore{
-			Host:       "localhost",
-			Port:       80,
-			JWTSecret:  uuid.New().String(),
-			Deployment: "dev",
-			LogLevel:   "INFO",
+			Host:          "localhost",
+			Port:          80,
+			JWTSecret:     rand.Text(),
+			Deployment:    "dev",
+			LogLevel:      "INFO",
+			Directory:     DirectoryTypeClubhouseDB,
+			TokenLifetime: 12 * 60 * 60, // seconds
 		},
 		Store: Store{
 			MySQL: StoreMySQL{
@@ -27,7 +29,26 @@ func DefaultIMS() *IMSConfig {
 				Database: "ims",
 			},
 		},
+		Directory: Directory{
+			TestUsers: nil,
+			ClubhouseDB: ClubhouseDB{
+				Hostname: "localhost",
+				HostPort: 3306,
+				Database: "rangers",
+			},
+		},
 	}
+}
+
+func (c *IMSConfig) String() string {
+	if c == nil {
+		return "nil"
+	}
+	marshalled, err := json.MarshalIndent(*c, "", "  ")
+	if err != nil {
+		return "failed to marshal IMSConfig"
+	}
+	return string(marshalled)
 }
 
 type IMSConfig struct {
@@ -42,28 +63,7 @@ type IMSConfig struct {
 	//	}
 	//}
 	Store     Store
-	Directory struct {
-		TestUsers   []TestUser
-		ClubhouseDB struct {
-			Hostname string
-			HostPort int32
-			Database string
-			Username string
-			// Password won't get marshalled as part of String() due to the json "-" tag.
-			Password string `json:"-"`
-		}
-	}
-}
-
-func (c *IMSConfig) String() string {
-	if c == nil {
-		return "nil"
-	}
-	marshalled, err := json.MarshalIndent(*c, "", "  ")
-	if err != nil {
-		return "failed to marshal IMSConfig"
-	}
-	return string(marshalled)
+	Directory Directory
 }
 
 type DirectoryType string
@@ -127,4 +127,18 @@ type TestUser struct {
 	Onsite      bool
 	Positions   []string
 	Teams       []string
+}
+
+type Directory struct {
+	TestUsers   []TestUser
+	ClubhouseDB ClubhouseDB
+}
+
+type ClubhouseDB struct {
+	Hostname string
+	HostPort int32
+	Database string
+	Username string
+	// Password won't get marshalled as part of String() due to the json "-" tag.
+	Password string `json:"-"`
 }

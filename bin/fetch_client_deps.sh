@@ -1,10 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 set -e
 
-reporoot=$(git rev-parse --show-toplevel)
-
-cd "${reporoot}"
+if [ -d .git ]; then
+  reporoot=$(git rev-parse --show-toplevel)
+  cd "${reporoot}"
+fi
 
 extdir="web/static/ext"
 mkdir -p "${extdir}"
