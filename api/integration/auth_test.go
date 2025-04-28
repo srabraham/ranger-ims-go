@@ -2,7 +2,6 @@ package integration
 
 import (
 	"github.com/srabraham/ranger-ims-go/api"
-	"github.com/srabraham/ranger-ims-go/directory"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +10,7 @@ import (
 )
 
 func TestPostAuthAPIAuthorization(t *testing.T) {
-	userStore, err := directory.NewUserStore(shared.cfg.Directory.TestUsers, nil)
-	require.NoError(t, err)
-	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, userStore))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, shared.userStore))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)

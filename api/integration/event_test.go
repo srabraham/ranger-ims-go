@@ -16,8 +16,8 @@ func TestEventAPIAuthorization(t *testing.T) {
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
-	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtNormalUser}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForTestAdminRanger(t)}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForRealTestUser(t)}
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
 	// Any authenticated user can call GetEvents
@@ -46,7 +46,7 @@ func TestGetAndEditEvent(t *testing.T) {
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForTestAdminRanger(t)}
 
 	testEventName := "MyNewEvent"
 
@@ -61,7 +61,7 @@ func TestGetAndEditEvent(t *testing.T) {
 		testEventName: {
 			Writers: []imsjson.AccessRule{
 				{
-					Expression: "person:" + shared.cfg.Core.Admins[0],
+					Expression: "person:TestAdminRanger",
 					Validity:   "always",
 				},
 			},

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -101,4 +102,32 @@ func (a ApiHelper) imsGet(path string, resp any) (any, *http.Response) {
 	err = json.Unmarshal(b, &resp)
 	require.NoError(a.t, err)
 	return resp, get
+}
+
+func jwtForRealTestUser(t *testing.T) string {
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, shared.userStore))
+	defer s.Close()
+	serverURL, err := url.Parse(s.URL)
+	require.NoError(t, err)
+	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
+	statusCode, _, token := apisNotAuthenticated.postAuth(api.PostAuthRequest{
+		Identification: "realtestuser@rangers.brc",
+		Password:       "password",
+	})
+	require.Equal(t, http.StatusOK, statusCode)
+	return token
+}
+
+func jwtForTestAdminRanger(t *testing.T) string {
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, shared.userStore))
+	defer s.Close()
+	serverURL, err := url.Parse(s.URL)
+	require.NoError(t, err)
+	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
+	statusCode, _, token := apisNotAuthenticated.postAuth(api.PostAuthRequest{
+		Identification: "testadminranger@rangers.brc",
+		Password:       ")'(",
+	})
+	require.Equal(t, http.StatusOK, statusCode)
+	return token
 }

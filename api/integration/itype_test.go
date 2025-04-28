@@ -2,14 +2,12 @@ package integration
 
 import (
 	"github.com/srabraham/ranger-ims-go/api"
-	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 )
 
 func TestIncidentTypesAPIAuthorization(t *testing.T) {
@@ -18,8 +16,8 @@ func TestIncidentTypesAPIAuthorization(t *testing.T) {
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
-	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtNormalUser}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForTestAdminRanger(t)}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForRealTestUser(t)}
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
 	// Any authenticated user can call GetIncidentTypes
@@ -48,10 +46,7 @@ func TestCreateIncident(t *testing.T) {
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	jwt := auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
-		shared.cfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
-	)
-	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
+	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForTestAdminRanger(t)}
 
 	// Make three new incident types
 	typeA, typeB, typeC := "Cat", "Dog", "Emu"

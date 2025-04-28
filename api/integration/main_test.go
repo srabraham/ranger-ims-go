@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/srabraham/ranger-ims-go/auth"
 	"github.com/srabraham/ranger-ims-go/conf"
+	"github.com/srabraham/ranger-ims-go/directory"
 	"github.com/srabraham/ranger-ims-go/store"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 // mainTestInternal contains fields to be used only within main_test.go.
@@ -25,9 +24,10 @@ var mainTestInternal struct {
 // shared contains fields that may be used by any test in the integration package.
 // These are fields from the common setup performed in main_test.go.
 var shared struct {
-	cfg                     *conf.IMSConfig
-	imsDB                   *store.DB
-	jwtAdmin, jwtNormalUser string
+	cfg   *conf.IMSConfig
+	imsDB *store.DB
+	// jwtAdmin, jwtNormalUser string
+	userStore *directory.UserStore
 }
 
 // TestMain does the common setup and teardown for all tests in this package.
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 func setup(ctx context.Context) {
 	shared.cfg = conf.DefaultIMS()
 	shared.cfg.Core.JWTSecret = rand.Text()
-	shared.cfg.Core.Admins = []string{"AdminRanger"}
+	shared.cfg.Core.Admins = []string{"TestAdminRanger"}
 	shared.cfg.Store.MySQL.Database = "ims"
 	shared.cfg.Store.MySQL.Username = "rangers"
 	shared.cfg.Store.MySQL.Password = rand.Text()
@@ -67,7 +67,23 @@ func setup(ctx context.Context) {
 			Positions: nil,
 			Teams:     nil,
 		},
+		{
+			Handle:      "TestAdminRanger",
+			Email:       "testadminranger@rangers.brc",
+			Status:      "active",
+			DirectoryID: 70707,
+			// password is ")'("
+			Password:  "SoSalty:7de49a1fc515ef8531a6247f3d3a23405c399fe9",
+			Onsite:    true,
+			Positions: nil,
+			Teams:     nil,
+		},
 	}
+	userStore, err := directory.NewUserStore(shared.cfg.Directory.TestUsers, nil)
+	if err != nil {
+		panic(err)
+	}
+	shared.userStore = userStore
 	req := testcontainers.ContainerRequest{
 		Image:        "mariadb:10.5.27",
 		ExposedPorts: []string{"3306/tcp"},
@@ -79,7 +95,6 @@ func setup(ctx context.Context) {
 			"MARIADB_PASSWORD":             shared.cfg.Store.MySQL.Password,
 		},
 	}
-	var err error
 	mainTestInternal.imsDBContainer, err = testcontainers.GenericContainer(ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
@@ -103,13 +118,6 @@ func setup(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-
-	shared.jwtAdmin = auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
-		shared.cfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
-	)
-	shared.jwtNormalUser = auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
-		"NonAdmin Ranger", 3289, nil, nil, true, 1*time.Hour,
-	)
 }
 
 func shutdown(ctx context.Context) {
