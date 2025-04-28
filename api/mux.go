@@ -24,8 +24,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetEventAccesses{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -33,8 +33,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			PostEventAccess{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -62,9 +62,9 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				admins:    cfg.Core.Admins,
 			},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			// This endpoint does not require authentication or authorization, by design
 			OptionalAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -72,8 +72,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncidents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -81,8 +81,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			NewIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -90,8 +90,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncident{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -99,8 +99,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncident{imsDB: db, es: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -108,8 +108,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncidentReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -117,8 +117,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetFieldReports{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -126,8 +126,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			NewFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -135,8 +135,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetFieldReport{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -144,8 +144,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditFieldReport{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -153,8 +153,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditFieldReportReportEntry{imsDB: db, eventSource: es, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -162,8 +162,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -171,8 +171,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditEvents{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -180,8 +180,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -189,8 +189,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditStreets{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -198,8 +198,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -207,8 +207,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			EditIncidentTypes{imsDB: db, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -216,8 +216,8 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 		Adapt(
 			GetPersonnel{imsDB: db, userStore: userStore, imsAdmins: cfg.Core.Admins},
 			RecoverOnPanic(),
-			LogBeforeAfter(),
 			RequireAuthN(jwter),
+			LogBeforeAfter(),
 		),
 	)
 
@@ -263,7 +263,8 @@ func LogBeforeAfter() Adapter {
 			}
 			slog.Debug("Done serving request",
 				"duration", time.Since(start).Round(100*time.Microsecond),
-				"method", r.Method, "path", r.URL.Path,
+				"method", r.Method,
+				"path", r.URL.Path,
 				"user", username,
 			)
 		})
@@ -280,9 +281,7 @@ func RecoverOnPanic() Adapter {
 					http.Error(w, "The server malfunctioned", http.StatusInternalServerError)
 				}
 			}()
-			start := time.Now()
 			next.ServeHTTP(w, r)
-			slog.Debug("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
 		})
 	}
 }
