@@ -255,7 +255,17 @@ func LogBeforeAfter() Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			next.ServeHTTP(w, r)
-			slog.Debug("Done serving request", "duration", time.Since(start).Round(100*time.Microsecond), "method", r.Method, "path", r.URL.Path)
+
+			username := "(unauthenticated)"
+			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
+			if found {
+				username = jwtCtx.Claims.RangerHandle()
+			}
+			slog.Debug("Done serving request",
+				"duration", time.Since(start).Round(100*time.Microsecond),
+				"method", r.Method, "path", r.URL.Path,
+				"user", username,
+			)
 		})
 	}
 }
