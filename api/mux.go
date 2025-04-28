@@ -257,8 +257,8 @@ func LogBeforeAfter() Adapter {
 			next.ServeHTTP(w, r)
 
 			username := "(unauthenticated)"
-			jwtCtx, found := r.Context().Value(JWTContextKey).(JWTContext)
-			if found {
+			jwtCtx, _ := r.Context().Value(JWTContextKey).(JWTContext)
+			if jwtCtx.Claims != nil {
 				username = jwtCtx.Claims.RangerHandle()
 			}
 			slog.Debug("Done serving request",

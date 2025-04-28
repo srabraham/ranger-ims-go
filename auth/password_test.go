@@ -2,6 +2,7 @@ package auth
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -12,16 +13,17 @@ func TestVerifyPassword_success(t *testing.T) {
 
 	stored := "my_little_salty:" + hashed
 	vp, err := VerifyPassword(pw, stored)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, vp)
 
 	vp, err = VerifyPassword("wrong password", stored)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, vp)
 }
 
 func TestVerifyPassword_badStoredValue(t *testing.T) {
 	noColonInThisString := "abcdefg"
 	_, err := VerifyPassword("some_password", noColonInThisString)
-	assert.Error(t, err)
+	require.Error(t, err)
+	require.Contains(t, "invalid hashed password", err.Error())
 }

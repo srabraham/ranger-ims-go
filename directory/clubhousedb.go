@@ -76,5 +76,5 @@ func (l DB) QueryRowContext(ctx context.Context, s string, i ...interface{}) *sq
 func logQuery(s string, start time.Time, err error) {
 	queryName, _, _ := strings.Cut(s, "\n")
 	queryName = strings.TrimPrefix(queryName, "-- name: ")
-	slog.Debug("Clubhouse Query", "millis", time.Since(start).Milliseconds(), "query", queryName, "err", err)
+	slog.Debug("DoneCH", "query", queryName, "ms", time.Since(start).Milliseconds(), "err", err)
 }
