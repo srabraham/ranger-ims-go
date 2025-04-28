@@ -13,13 +13,13 @@ import (
 )
 
 func TestIncidentTypesAPIAuthorization(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
-	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtNormalUser}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtNormalUser}
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
 	// Any authenticated user can call GetIncidentTypes
@@ -43,13 +43,13 @@ func TestIncidentTypesAPIAuthorization(t *testing.T) {
 }
 
 func TestCreateIncident(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	jwt := auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
-		imsTestCfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
+	jwt := auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
+		shared.cfg.Core.Admins[0], 123, nil, nil, true, 1*time.Hour,
 	)
 	apis := ApiHelper{t: t, serverURL: serverURL, jwt: jwt}
 

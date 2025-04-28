@@ -11,13 +11,13 @@ import (
 )
 
 func TestEventAPIAuthorization(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
-	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtNormalUser}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
+	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtNormalUser}
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
 	// Any authenticated user can call GetEvents
@@ -41,12 +41,12 @@ func TestEventAPIAuthorization(t *testing.T) {
 }
 
 func TestGetAndEditEvent(t *testing.T) {
-	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, nil))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, nil))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)
 
-	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtAdmin}
+	apisAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: shared.jwtAdmin}
 
 	testEventName := "MyNewEvent"
 
@@ -61,7 +61,7 @@ func TestGetAndEditEvent(t *testing.T) {
 		testEventName: {
 			Writers: []imsjson.AccessRule{
 				{
-					Expression: "person:" + imsTestCfg.Core.Admins[0],
+					Expression: "person:" + shared.cfg.Core.Admins[0],
 					Validity:   "always",
 				},
 			},

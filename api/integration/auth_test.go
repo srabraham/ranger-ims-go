@@ -11,9 +11,9 @@ import (
 )
 
 func TestPostAuthAPIAuthorization(t *testing.T) {
-	userStore, err := directory.NewUserStore(imsTestCfg.Directory.TestUsers, nil)
+	userStore, err := directory.NewUserStore(shared.cfg.Directory.TestUsers, nil)
 	require.NoError(t, err)
-	s := httptest.NewServer(api.AddToMux(nil, imsTestCfg, imsDB, userStore))
+	s := httptest.NewServer(api.AddToMux(nil, shared.cfg, shared.imsDB, userStore))
 	defer s.Close()
 	serverURL, err := url.Parse(s.URL)
 	require.NoError(t, err)

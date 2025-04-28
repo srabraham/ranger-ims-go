@@ -17,14 +17,22 @@ import (
 	"time"
 )
 
-var (
+// mainTestInternal contains fields to be used only within main_test.go.
+var mainTestInternal struct {
 	imsDBContainer testcontainers.Container
-	imsTestCfg     *conf.IMSConfig
-	imsDB          *store.DB
+}
 
+// shared contains fields that may be used by any test in the integration package.
+// These are fields from the common setup performed in main_test.go.
+var shared struct {
+	cfg                     *conf.IMSConfig
+	imsDB                   *store.DB
 	jwtAdmin, jwtNormalUser string
-)
+}
 
+// TestMain does the common setup and teardown for all tests in this package.
+// It's slow to start up a MariaDB container, so we want to only have to do
+// that once for the whole suite of test files.
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 	defer func() {
@@ -40,14 +48,14 @@ func TestMain(m *testing.M) {
 }
 
 func setup(ctx context.Context) {
-	imsTestCfg = conf.DefaultIMS()
-	imsTestCfg.Core.JWTSecret = rand.Text()
-	imsTestCfg.Core.Admins = []string{"AdminRanger"}
-	imsTestCfg.Store.MySQL.Database = "ims"
-	imsTestCfg.Store.MySQL.Username = "rangers"
-	imsTestCfg.Store.MySQL.Password = rand.Text()
-	imsTestCfg.Core.Directory = conf.DirectoryTypeTestUsers
-	imsTestCfg.Directory.TestUsers = []conf.TestUser{
+	shared.cfg = conf.DefaultIMS()
+	shared.cfg.Core.JWTSecret = rand.Text()
+	shared.cfg.Core.Admins = []string{"AdminRanger"}
+	shared.cfg.Store.MySQL.Database = "ims"
+	shared.cfg.Store.MySQL.Username = "rangers"
+	shared.cfg.Store.MySQL.Password = rand.Text()
+	shared.cfg.Core.Directory = conf.DirectoryTypeTestUsers
+	shared.cfg.Directory.TestUsers = []conf.TestUser{
 		{
 			Handle:      "RealTestUserInConfig",
 			Email:       "realtestuser@rangers.brc",
@@ -66,13 +74,13 @@ func setup(ctx context.Context) {
 		WaitingFor:   wait.ForListeningPort("3306/tcp"),
 		Env: map[string]string{
 			"MARIADB_RANDOM_ROOT_PASSWORD": "true",
-			"MARIADB_DATABASE":             imsTestCfg.Store.MySQL.Database,
-			"MARIADB_USER":                 imsTestCfg.Store.MySQL.Username,
-			"MARIADB_PASSWORD":             imsTestCfg.Store.MySQL.Password,
+			"MARIADB_DATABASE":             shared.cfg.Store.MySQL.Database,
+			"MARIADB_USER":                 shared.cfg.Store.MySQL.Username,
+			"MARIADB_PASSWORD":             shared.cfg.Store.MySQL.Password,
 		},
 	}
 	var err error
-	imsDBContainer, err = testcontainers.GenericContainer(ctx,
+	mainTestInternal.imsDBContainer, err = testcontainers.GenericContainer(ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
 			Started:          true,
@@ -83,30 +91,30 @@ func setup(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	endpoint, err := imsDBContainer.Endpoint(ctx, "")
+	endpoint, err := mainTestInternal.imsDBContainer.Endpoint(ctx, "")
 	if err != nil {
 		panic(err)
 	}
 	port, _ := strconv.Atoi(strings.TrimPrefix(endpoint, "localhost:"))
-	imsTestCfg.Store.MySQL.HostPort = int32(port)
-	imsDB = &store.DB{DB: store.MariaDB(imsTestCfg)}
+	shared.cfg.Store.MySQL.HostPort = int32(port)
+	shared.imsDB = &store.DB{DB: store.MariaDB(shared.cfg)}
 	script := "BEGIN NOT ATOMIC\n" + store.CurrentSchema + "\nEND"
-	_, err = imsDB.ExecContext(ctx, script)
+	_, err = shared.imsDB.ExecContext(ctx, script)
 	if err != nil {
 		panic(err)
 	}
 
-	jwtAdmin = auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
-		imsTestCfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
+	shared.jwtAdmin = auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
+		shared.cfg.Core.Admins[0], 65483, nil, nil, true, 1*time.Hour,
 	)
-	jwtNormalUser = auth.JWTer{SecretKey: imsTestCfg.Core.JWTSecret}.CreateJWT(
+	shared.jwtNormalUser = auth.JWTer{SecretKey: shared.cfg.Core.JWTSecret}.CreateJWT(
 		"NonAdmin Ranger", 3289, nil, nil, true, 1*time.Hour,
 	)
 }
 
 func shutdown(ctx context.Context) {
-	_ = imsDB.Close()
-	err := imsDBContainer.Terminate(ctx)
+	_ = shared.imsDB.Close()
+	err := mainTestInternal.imsDBContainer.Terminate(ctx)
 	if err != nil {
 		// log and continue
 		slog.Error("Failed to terminate container", "error", err)
