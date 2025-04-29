@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/srabraham/ranger-ims-go/auth"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
@@ -129,6 +130,10 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	storedRow, reportEntries, err := fetchIncident(ctx, action.imsDB, event.ID, int32(incidentNumber))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			handleErr(w, req, http.StatusNotFound, "No such incident", err)
+			return
+		}
 		handleErr(w, req, http.StatusInternalServerError, "Failed to fetch Incident", err)
 		return
 	}

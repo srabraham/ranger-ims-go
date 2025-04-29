@@ -43,28 +43,71 @@ func TestIncidentAPIAuthorization(t *testing.T) {
 	apisNonAdmin := ApiHelper{t: t, serverURL: serverURL, jwt: jwtForRealTestUser(t)}
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 
-	// make an event, make Alice a writer
+	// make an event, to which no one has access
 	eventName := "IncidentEvent-943034"
 	resp := apisAdmin.editEvent(imsjson.EditEventsRequest{Add: []string{eventName}})
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
+	// test all the APIs... getIncidents, getIncident, newIncident, updateIncident
 	_, resp = apisNotAuthenticated.getIncidents(eventName)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	_, resp = apisNonAdmin.getIncidents(eventName)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 	_, resp = apisAdmin.getIncidents(eventName)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// get incident
+	_, resp = apisNotAuthenticated.getIncident(eventName, 1)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	_, resp = apisNonAdmin.getIncident(eventName, 1)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	_, resp = apisAdmin.getIncident(eventName, 1)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// new incident
+	resp = apisNotAuthenticated.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp = apisAdmin.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// update incident
+	resp = apisNotAuthenticated.updateIncident(eventName, 1, imsjson.Incident{})
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.updateIncident(eventName, 1, imsjson.Incident{})
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp = apisAdmin.updateIncident(eventName, 1, imsjson.Incident{})
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
 	// make Alice a writer
 	resp = apisAdmin.addWriter(eventName, userAliceHandle)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
+	// test all the APIs again... getIncidents, getIncident, newIncident, updateIncident
 	_, resp = apisNotAuthenticated.getIncidents(eventName)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	_, resp = apisNonAdmin.getIncidents(eventName)
-	// now she can get results
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	_, resp = apisAdmin.getIncidents(eventName)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// get incident
+	_, resp = apisNotAuthenticated.getIncident(eventName, 1)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	_, resp = apisNonAdmin.getIncident(eventName, 1)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	_, resp = apisAdmin.getIncident(eventName, 1)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// new incident
+	resp = apisNotAuthenticated.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	resp = apisAdmin.newIncident(imsjson.Incident{Event: eventName})
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// update incident
+	resp = apisNotAuthenticated.updateIncident(eventName, 1, imsjson.Incident{})
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp = apisNonAdmin.updateIncident(eventName, 1, imsjson.Incident{})
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	resp = apisAdmin.updateIncident(eventName, 1, imsjson.Incident{})
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
