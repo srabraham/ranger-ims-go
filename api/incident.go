@@ -80,6 +80,7 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		resp = append(resp, imsjson.Incident{
 			Event:        event.Name,
+			EventID:      event.ID,
 			Number:       r.Incident.Number,
 			Created:      time.Unix(int64(r.Incident.Created), 0),
 			LastModified: lastModified,
@@ -87,11 +88,11 @@ func (action GetIncidents) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Priority:     r.Incident.Priority,
 			Summary:      stringOrNil(r.Incident.Summary),
 			Location: imsjson.Location{
-				Name:         ptr(r.Incident.LocationName.String),
-				Concentric:   ptr(r.Incident.LocationConcentric.String),
+				Name:         stringOrNil(r.Incident.LocationName),
+				Concentric:   stringOrNil(r.Incident.LocationConcentric),
 				RadialHour:   formatInt16(r.Incident.LocationRadialHour),
 				RadialMinute: formatInt16(r.Incident.LocationRadialMinute),
-				Description:  ptr(r.Incident.LocationDescription.String),
+				Description:  stringOrNil(r.Incident.LocationDescription),
 				Type:         garett,
 			},
 			IncidentTypes: &incidentTypes,
@@ -151,6 +152,7 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	result := imsjson.Incident{
 		Event:        event.Name,
+		EventID:      event.ID,
 		Number:       storedRow.Incident.Number,
 		Created:      time.Unix(int64(storedRow.Incident.Created), 0),
 		LastModified: lastModified,
@@ -158,11 +160,11 @@ func (action GetIncident) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		Priority:     storedRow.Incident.Priority,
 		Summary:      stringOrNil(storedRow.Incident.Summary),
 		Location: imsjson.Location{
-			Name:         ptr(storedRow.Incident.LocationName.String),
-			Concentric:   ptr(storedRow.Incident.LocationConcentric.String),
+			Name:         stringOrNil(storedRow.Incident.LocationName),
+			Concentric:   stringOrNil(storedRow.Incident.LocationConcentric),
 			RadialHour:   formatInt16(storedRow.Incident.LocationRadialHour),
 			RadialMinute: formatInt16(storedRow.Incident.LocationRadialMinute),
-			Description:  ptr(storedRow.Incident.LocationDescription.String),
+			Description:  stringOrNil(storedRow.Incident.LocationDescription),
 			Type:         garett,
 		},
 		IncidentTypes: &incidentTypes,

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -60,10 +61,25 @@ func (a ApiHelper) newIncident(req imsjson.Incident) *http.Response {
 	return a.imsPost(req, a.serverURL.JoinPath("/ims/api/events/"+req.Event+"/incidents").String())
 }
 
+func (a ApiHelper) newIncidentSuccess(incidentReq imsjson.Incident) (incidentNumber int32) {
+	resp := a.newIncident(incidentReq)
+	require.Equal(a.t, http.StatusCreated, resp.StatusCode)
+	numStr := resp.Header.Get("X-IMS-Incident-Number")
+	require.NotEmpty(a.t, numStr)
+	num, err := strconv.ParseInt(numStr, 10, 32)
+	require.NoError(a.t, err)
+	require.Greater(a.t, num, int64(0))
+	return int32(num)
+}
+
 func (a ApiHelper) getIncident(eventName string, incident int32) (imsjson.Incident, *http.Response) {
-	path := a.serverURL.JoinPath(fmt.Sprint("/ims/api/events/", eventName, "/incidents/", incident)).String()
+	path := a.serverURL.JoinPath("/ims/api/events/", eventName, "/incidents/", fmt.Sprint(incident)).String()
 	bod, resp := a.imsGet(path, &imsjson.Incident{})
 	return *bod.(*imsjson.Incident), resp
+}
+
+func (a ApiHelper) updateIncident(eventName string, incident int32, req imsjson.Incident) *http.Response {
+	return a.imsPost(req, a.serverURL.JoinPath("/ims/api/events/", eventName, "/incidents/", fmt.Sprint(incident)).String())
 }
 
 func (a ApiHelper) getIncidents(eventName string) (imsjson.Incidents, *http.Response) {
@@ -79,6 +95,17 @@ func (a ApiHelper) editEvent(req imsjson.EditEventsRequest) *http.Response {
 func (a ApiHelper) getEvents() (imsjson.Events, *http.Response) {
 	bod, resp := a.imsGet(a.serverURL.JoinPath("/ims/api/events").String(), &imsjson.Events{})
 	return *bod.(*imsjson.Events), resp
+}
+
+func (a ApiHelper) addWriter(eventName, handle string) *http.Response {
+	return a.editAccess(imsjson.EventsAccess{
+		eventName: imsjson.EventAccess{
+			Writers: []imsjson.AccessRule{{
+				Expression: "person:" + handle,
+				Validity:   "always",
+			}},
+		},
+	})
 }
 
 func (a ApiHelper) editAccess(req imsjson.EventsAccess) *http.Response {
