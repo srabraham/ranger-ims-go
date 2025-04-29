@@ -34,6 +34,15 @@ func (a ApiHelper) postAuth(req api.PostAuthRequest) (statusCode int, body, vali
 	return resp.StatusCode, string(b), response.Token
 }
 
+func (a ApiHelper) getAuth(eventName string) (api.GetAuthResponse, *http.Response) {
+	path := a.serverURL.JoinPath("/ims/api/auth").String()
+	if eventName != "" {
+		path = path + "?event_id=" + eventName
+	}
+	bod, resp := a.imsGet(path, &api.GetAuthResponse{})
+	return *bod.(*api.GetAuthResponse), resp
+}
+
 func (a ApiHelper) editTypes(req imsjson.EditIncidentTypesRequest) *http.Response {
 	return a.imsPost(req, a.serverURL.JoinPath("/ims/api/incident_types").String())
 }
@@ -57,6 +66,12 @@ func (a ApiHelper) getIncident(eventName string, incident int32) (imsjson.Incide
 	return *bod.(*imsjson.Incident), resp
 }
 
+func (a ApiHelper) getIncidents(eventName string) (imsjson.Incidents, *http.Response) {
+	path := a.serverURL.JoinPath(fmt.Sprint("/ims/api/events/", eventName, "/incidents")).String()
+	bod, resp := a.imsGet(path, &imsjson.Incidents{})
+	return *bod.(*imsjson.Incidents), resp
+}
+
 func (a ApiHelper) editEvent(req imsjson.EditEventsRequest) *http.Response {
 	return a.imsPost(req, a.serverURL.JoinPath("/ims/api/events").String())
 }
@@ -73,7 +88,6 @@ func (a ApiHelper) editAccess(req imsjson.EventsAccess) *http.Response {
 func (a ApiHelper) getAccess() (imsjson.EventsAccess, *http.Response) {
 	bod, resp := a.imsGet(a.serverURL.JoinPath("/ims/api/access").String(), &imsjson.EventsAccess{})
 	return *bod.(*imsjson.EventsAccess), resp
-	// return *a.imsGet(a.serverURL.JoinPath("/ims/api/access").String(), &imsjson.EventsAccess{}).(*imsjson.EventsAccess)
 }
 
 func (a ApiHelper) imsPost(body any, path string) *http.Response {
@@ -122,8 +136,8 @@ func jwtForRealTestUser(t *testing.T) string {
 	require.NoError(t, err)
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 	statusCode, _, token := apisNotAuthenticated.postAuth(api.PostAuthRequest{
-		Identification: "realtestuser@rangers.brc",
-		Password:       "password",
+		Identification: userAliceEmail,
+		Password:       userAlicePassword,
 	})
 	require.Equal(t, http.StatusOK, statusCode)
 	return token
@@ -136,8 +150,8 @@ func jwtForTestAdminRanger(t *testing.T) string {
 	require.NoError(t, err)
 	apisNotAuthenticated := ApiHelper{t: t, serverURL: serverURL, jwt: ""}
 	statusCode, _, token := apisNotAuthenticated.postAuth(api.PostAuthRequest{
-		Identification: "testadminranger@rangers.brc",
-		Password:       ")'(",
+		Identification: userAdminEmail,
+		Password:       userAdminPassword,
 	})
 	require.Equal(t, http.StatusOK, statusCode)
 	return token

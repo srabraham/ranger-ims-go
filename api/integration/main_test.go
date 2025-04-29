@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/srabraham/ranger-ims-go/auth/password"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"github.com/srabraham/ranger-ims-go/directory"
 	"github.com/srabraham/ranger-ims-go/store"
@@ -30,6 +31,16 @@ var shared struct {
 	userStore *directory.UserStore
 }
 
+const (
+	userAdminHandle   = "AdminTestRanger"
+	userAdminEmail    = "admintestranger@rangers.brc"
+	userAdminPassword = ")'("
+
+	userAliceHandle   = "AliceTestRanger"
+	userAliceEmail    = "alicetestranger@rangers.brc"
+	userAlicePassword = "password"
+)
+
 // TestMain does the common setup and teardown for all tests in this package.
 // It's slow to start up a MariaDB container, so we want to only have to do
 // that once for the whole suite of test files.
@@ -50,33 +61,31 @@ func TestMain(m *testing.M) {
 func setup(ctx context.Context) {
 	shared.cfg = conf.DefaultIMS()
 	shared.cfg.Core.JWTSecret = rand.Text()
-	shared.cfg.Core.Admins = []string{"TestAdminRanger"}
+	shared.cfg.Core.Admins = []string{userAdminHandle}
 	shared.cfg.Store.MySQL.Database = "ims"
 	shared.cfg.Store.MySQL.Username = "rangers"
 	shared.cfg.Store.MySQL.Password = rand.Text()
-	shared.cfg.Core.Directory = conf.DirectoryTypeTestUsers
+	shared.cfg.Directory.Directory = conf.DirectoryTypeTestUsers
 	shared.cfg.Directory.TestUsers = []conf.TestUser{
 		{
-			Handle:      "RealTestUserInConfig",
-			Email:       "realtestuser@rangers.brc",
+			Handle:      userAliceHandle,
+			Email:       userAliceEmail,
 			Status:      "active",
 			DirectoryID: 80808,
-			// password is "password"
-			Password:  "salt-and-pepper:7c5b8e2d772d79374609c5c480fa93ce45e4ac5a",
-			Onsite:    true,
-			Positions: nil,
-			Teams:     nil,
+			Password:    password.NewSalted("password"),
+			Onsite:      true,
+			Positions:   nil,
+			Teams:       nil,
 		},
 		{
-			Handle:      "TestAdminRanger",
-			Email:       "testadminranger@rangers.brc",
+			Handle:      userAdminHandle,
+			Email:       userAdminEmail,
 			Status:      "active",
 			DirectoryID: 70707,
-			// password is ")'("
-			Password:  "SoSalty:7de49a1fc515ef8531a6247f3d3a23405c399fe9",
-			Onsite:    true,
-			Positions: nil,
-			Teams:     nil,
+			Password:    password.NewSalted(")'("),
+			Onsite:      true,
+			Positions:   nil,
+			Teams:       nil,
 		},
 	}
 	userStore, err := directory.NewUserStore(shared.cfg.Directory.TestUsers, nil)

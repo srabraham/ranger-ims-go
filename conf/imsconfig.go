@@ -4,9 +4,13 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
-var Cfg *IMSConfig
+var (
+	Cfg       *IMSConfig
+	testUsers []TestUser
+)
 
 // DefaultIMS is the base configuration used for the IMS server.
 // It gets overridden by values in conf/imsd.toml, then the result
@@ -19,8 +23,7 @@ func DefaultIMS() *IMSConfig {
 			JWTSecret:     rand.Text(),
 			Deployment:    "dev",
 			LogLevel:      "INFO",
-			Directory:     DirectoryTypeClubhouseDB,
-			TokenLifetime: 12 * 60 * 60, // seconds
+			TokenLifetime: 1 * time.Hour,
 		},
 		Store: Store{
 			MySQL: StoreMySQL{
@@ -30,10 +33,10 @@ func DefaultIMS() *IMSConfig {
 			},
 		},
 		Directory: Directory{
-			TestUsers: nil,
+			Directory: DirectoryTypeClubhouseDB,
+			TestUsers: testUsers,
 			ClubhouseDB: ClubhouseDB{
-				Hostname: "localhost",
-				HostPort: 3306,
+				Hostname: "localhost:3306",
 				Database: "rangers",
 			},
 		},
@@ -54,48 +57,53 @@ func (c *IMSConfig) String() string {
 type IMSConfig struct {
 	Core ConfigCore
 	// TODO: finish attachments feature
-	//AttachmentsStore struct {
-	//	S3 struct {
-	//		S3AccessKeyId     string
-	//		S3SecretAccessKey string
-	//		S3DefaultRegion   string
-	//		S3Bucket          string
-	//	}
-	//}
+	AttachmentsStore struct {
+		S3 struct {
+			S3AccessKeyId     string
+			S3SecretAccessKey string
+			S3DefaultRegion   string
+			S3Bucket          string
+		}
+	}
 	Store     Store
 	Directory Directory
 }
 
 type DirectoryType string
+type DeploymentType string
 
 const (
-	DirectoryTypeClubhouseDB DirectoryType = "ClubhouseDB"
-	DirectoryTypeTestUsers   DirectoryType = "TestUsers"
+	DirectoryTypeClubhouseDB DirectoryType = "clubhousedb"
+	DirectoryTypeTestUsers   DirectoryType = "testusers"
+	DeploymentTypeDev                      = "dev"
+	DeploymentTypeStaging                  = "staging"
+	DeploymentTypeProduction               = "production"
 )
 
 func (d DirectoryType) Validate() error {
 	switch d {
-	case DirectoryTypeClubhouseDB:
-		return nil
-	case DirectoryTypeTestUsers:
+	case DirectoryTypeClubhouseDB, DirectoryTypeTestUsers:
 		return nil
 	default:
 		return fmt.Errorf("unknown directory type %v", d)
 	}
 }
 
+func (d DeploymentType) Validate() error {
+	switch d {
+	case DeploymentTypeDev, DeploymentTypeStaging, DeploymentTypeProduction:
+		return nil
+	default:
+		return fmt.Errorf("unknown deployment type %v", d)
+	}
+}
+
 type ConfigCore struct {
-	ServerRoot      string
-	TokenLifetime   int64
-	Dataroot        string
-	Admins          []string
-	DataStore       string
-	Directory       DirectoryType
-	ConfigRoot      string
-	CachedResources string
-	Host            string
-	Port            int32
-	MasterKey       string
+	Host          string
+	Port          int32
+	TokenLifetime time.Duration
+	Admins        []string
+	MasterKey     string
 	// JWTSecret won't get marshalled as part of String() due to the json "-" tag.
 	JWTSecret        string `json:"-"`
 	AttachmentsStore string
@@ -130,13 +138,13 @@ type TestUser struct {
 }
 
 type Directory struct {
+	Directory   DirectoryType
 	TestUsers   []TestUser
 	ClubhouseDB ClubhouseDB
 }
 
 type ClubhouseDB struct {
 	Hostname string
-	HostPort int32
 	Database string
 	Username string
 	// Password won't get marshalled as part of String() due to the json "-" tag.

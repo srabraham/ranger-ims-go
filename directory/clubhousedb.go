@@ -3,7 +3,6 @@ package directory
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/srabraham/ranger-ims-go/conf"
 	"log/slog"
@@ -20,7 +19,7 @@ func MariaDB(imsCfg *conf.IMSConfig) *DB {
 	cfg.User = imsCfg.Directory.ClubhouseDB.Username
 	cfg.Passwd = imsCfg.Directory.ClubhouseDB.Password
 	cfg.Net = "tcp"
-	cfg.Addr = fmt.Sprintf("%v:%v", imsCfg.Directory.ClubhouseDB.Hostname, imsCfg.Directory.ClubhouseDB.HostPort)
+	cfg.Addr = imsCfg.Directory.ClubhouseDB.Hostname
 	cfg.DBName = imsCfg.Directory.ClubhouseDB.Database
 
 	// Get a database handle.
@@ -37,7 +36,7 @@ func MariaDB(imsCfg *conf.IMSConfig) *DB {
 		slog.Error("Failed ping attempt to Clubhouse DB", "error", pingErr)
 		os.Exit(1)
 	}
-	slog.Info("Connected to IMS MariaDB")
+	slog.Info("Connected to Clubhouse MariaDB")
 	return &DB{DB: db}
 }
 

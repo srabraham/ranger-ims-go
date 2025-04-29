@@ -44,7 +44,7 @@ func AddToMux(mux *http.ServeMux, cfg *conf.IMSConfig, db *store.DB, userStore *
 				imsDB:       db,
 				userStore:   userStore,
 				jwtSecret:   cfg.Core.JWTSecret,
-				jwtDuration: time.Duration(cfg.Core.TokenLifetime) * time.Second,
+				jwtDuration: cfg.Core.TokenLifetime,
 			},
 			RecoverOnPanic(),
 			LogBeforeAfter(),

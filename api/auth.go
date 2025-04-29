@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/srabraham/ranger-ims-go/auth"
+	"github.com/srabraham/ranger-ims-go/auth/password"
 	"github.com/srabraham/ranger-ims-go/directory"
 	imsjson "github.com/srabraham/ranger-ims-go/json"
 	"github.com/srabraham/ranger-ims-go/store"
@@ -62,7 +63,7 @@ func (action PostAuth) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	correct, err := auth.VerifyPassword(vals.Password, matchedPerson.Password)
+	correct, err := password.Verify(vals.Password, matchedPerson.Password)
 	if !correct {
 		handleErr(w, req, http.StatusUnauthorized, "Failed login attempt (bad credentials)",
 			fmt.Errorf("bad password for valid user. Identification: %v", vals.Identification))
